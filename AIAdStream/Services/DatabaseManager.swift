@@ -216,16 +216,22 @@ final class DatabaseManager {
     func tagsForAd(_ adId: String) -> [AITag] {
         var result: [AITag] = []
         dbQueue.sync {
-            let rows = executeQuery("SELECT * FROM ad_tags WHERE ad_id = ?") { stmt in
-                sqlite3_bind_text(stmt, 1, (adId as NSString).utf8String, -1, nil)
-            }
-            for row in rows {
-                result.append(AITag(
-                    id: row["id"] as? String ?? "",
-                    name: row["name"] as? String ?? "",
-                    category: TagCategory(rawValue: row["category"] as? String ?? "category") ?? .category
-                ))
-            }
+            result = tagsForAdInternal(adId)
+        }
+        return result
+    }
+
+    private func tagsForAdInternal(_ adId: String) -> [AITag] {
+        var result: [AITag] = []
+        let rows = executeQuery("SELECT * FROM ad_tags WHERE ad_id = ?") { stmt in
+            sqlite3_bind_text(stmt, 1, (adId as NSString).utf8String, -1, nil)
+        }
+        for row in rows {
+            result.append(AITag(
+                id: row["id"] as? String ?? "",
+                name: row["name"] as? String ?? "",
+                category: TagCategory(rawValue: row["category"] as? String ?? "category") ?? .category
+            ))
         }
         return result
     }
@@ -406,7 +412,7 @@ final class DatabaseManager {
             videoURL: row["video_url"] as? String,
             cardType: AdCardType(rawValue: row["card_type"] as? String ?? "bigImage") ?? .bigImage,
             channel: Channel(rawValue: row["channel"] as? String ?? "featured") ?? .featured,
-            tags: tagsForAd(adId),
+            tags: tagsForAdInternal(adId),
             aiSummary: row["ai_summary"] as? String,
             sponsor: row["sponsor"] as? String ?? "",
             ctaText: row["cta_text"] as? String ?? "了解详情"

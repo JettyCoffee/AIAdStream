@@ -59,13 +59,14 @@ struct SeedDataGenerator {
         ]
 
         return items.enumerated().map { idx, item in
-            AdItem(
+            let types: [AdCardType] = item.video ? AdCardType.allCases : [.bigImage, .smallImage]
+            return AdItem(
                 id: "feat_\(idx)",
                 title: item.title,
                 description: item.desc,
                 imageURL: "feat_image_\(idx)",
                 videoURL: item.video ? "https://example.com/video/feat_\(idx).mp4" : nil,
-                cardType: item.cardType,
+                cardType: types.randomElement()!,
                 channel: .featured,
                 tags: item.tags.map { AITag(id: "feat_tag_\(idx)_\($0.0)", name: $0.0, category: $0.1) },
                 aiSummary: nil,
@@ -116,13 +117,13 @@ struct SeedDataGenerator {
         ]
 
         return items.enumerated().map { idx, item in
-            AdItem(
+            return AdItem(
                 id: "ec_\(idx)",
                 title: item.title,
                 description: item.desc,
                 imageURL: "ec_image_\(idx)",
                 videoURL: nil,
-                cardType: item.cardType,
+                cardType: [.bigImage, .smallImage].randomElement()!,
                 channel: .ecommerce,
                 tags: item.tags.map { AITag(id: "ec_tag_\(idx)_\($0.0)", name: $0.0, category: $0.1) },
                 aiSummary: nil,
@@ -173,13 +174,13 @@ struct SeedDataGenerator {
         ]
 
         return items.enumerated().map { idx, item in
-            AdItem(
+            return AdItem(
                 id: "local_\(idx)",
                 title: item.title,
                 description: item.desc,
                 imageURL: "local_image_\(idx)",
                 videoURL: "https://example.com/video/local_\(idx).mp4",
-                cardType: item.cardType,
+                cardType: AdCardType.allCases.randomElement()!,
                 channel: .local,
                 tags: item.tags.map { AITag(id: "local_tag_\(idx)_\($0.0)", name: $0.0, category: $0.1) },
                 aiSummary: nil,

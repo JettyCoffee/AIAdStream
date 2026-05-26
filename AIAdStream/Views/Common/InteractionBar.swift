@@ -12,17 +12,13 @@ struct InteractionBar: View {
     var body: some View {
         HStack(spacing: 24) {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                    state.isLiked.toggle()
-                    state.likeCount += state.isLiked ? 1 : -1
-                }
+                onLike?()
                 if state.isLiked {
                     likeScale = 1.5
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                         likeScale = 1.0
                     }
                 }
-                onLike?()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: state.isLiked ? "heart.fill" : "heart")
@@ -44,9 +40,6 @@ struct InteractionBar: View {
             .buttonStyle(.plain)
 
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                    state.isCollected.toggle()
-                }
                 onCollect?()
             } label: {
                 Image(systemName: state.isCollected ? "bookmark.fill" : "bookmark")
@@ -61,9 +54,6 @@ struct InteractionBar: View {
             .buttonStyle(.plain)
 
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                    state.shareCount += 1
-                }
                 onShare?()
             } label: {
                 HStack(spacing: 4) {
