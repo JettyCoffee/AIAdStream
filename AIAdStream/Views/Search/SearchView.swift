@@ -6,65 +6,62 @@ struct SearchView: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(Constants.Colors.secondaryText)
-                    TextField("描述你想看的广告...", text: $viewModel.query)
-                        .font(.system(size: 15))
-                        .focused($isFocused)
-                        .submitLabel(.search)
-                        .onSubmit {
-                            Task {
-                                isFocused = false
-                                await viewModel.search(ads: feedViewModel.allAdsForCurrentChannel)
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(Constants.Colors.secondaryText)
+                        TextField("描述你想看的广告...", text: $viewModel.query)
+                            .font(.system(size: 15))
+                            .focused($isFocused)
+                            .submitLabel(.search)
+                            .onSubmit {
+                                Task { await viewModel.search() }
+                            }
+                        if !viewModel.query.isEmpty {
+                            Button {
+                                viewModel.query = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(Constants.Colors.secondaryText)
                             }
                         }
-                    if !viewModel.query.isEmpty {
-                        Button {
-                            viewModel.query = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(Constants.Colors.secondaryText)
-                        }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(red: 0.95, green: 0.95, blue: 0.96))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    Button("搜索") {
+                        isFocused = false
+                        Task { await viewModel.search() }
+                    }
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.blue)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, Constants.horizontalPadding)
                 .padding(.vertical, 10)
-                .background(Color(red: 0.95, green: 0.95, blue: 0.96))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                Button("搜索") {
-                    isFocused = false
-                    Task {
-                        await viewModel.search(ads: feedViewModel.allAdsForCurrentChannel)
-                    }
+                Divider()
+
+                if viewModel.isSearching {
+                    Spacer()
+                    ProgressView("搜索中...")
+                        .foregroundColor(Constants.Colors.secondaryText)
+                    Spacer()
+                } else if viewModel.hasSearched && viewModel.results.isEmpty {
+                    emptyResultView
+                } else if viewModel.hasSearched {
+                    resultListView
+                } else {
+                    suggestionView
                 }
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(.blue)
             }
-            .padding(.horizontal, Constants.horizontalPadding)
-            .padding(.vertical, 10)
-
-            Divider()
-
-            if viewModel.isSearching {
-                Spacer()
-                ProgressView("搜索中...")
-                    .foregroundColor(Constants.Colors.secondaryText)
-                Spacer()
-            } else if viewModel.hasSearched && viewModel.results.isEmpty {
-                emptyResultView
-            } else if viewModel.hasSearched {
-                resultListView
-            } else {
-                suggestionView
-            }
+            .navigationTitle("对话式搜索")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear { isFocused = true }
         }
-        .navigationTitle("对话式搜索")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear { isFocused = true }
     }
 
     private var resultListView: some View {
@@ -133,9 +130,7 @@ struct SearchView: View {
                 ], id: \.self) { suggestion in
                     Button {
                         viewModel.query = suggestion
-                        Task {
-                            await viewModel.search(ads: feedViewModel.allAdsForCurrentChannel)
-                        }
+                        Task { await viewModel.search() }
                     } label: {
                         HStack {
                             Image(systemName: "text.bubble")

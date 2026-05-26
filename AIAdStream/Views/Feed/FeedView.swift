@@ -2,7 +2,6 @@ import SwiftUI
 
 struct FeedView: View {
     @EnvironmentObject var viewModel: FeedViewModel
-    @State private var scrollPosition: String?
     @State private var activeVideoId: String?
 
     var body: some View {
@@ -18,6 +17,11 @@ struct FeedView: View {
                 Divider()
                     .foregroundColor(Constants.Colors.separator)
 
+                tagFilterBar
+
+                Divider()
+                    .foregroundColor(Constants.Colors.separator)
+
                 if viewModel.ads.isEmpty && !viewModel.isLoading {
                     emptyStateView
                 } else {
@@ -28,24 +32,21 @@ struct FeedView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(viewModel.currentChannel.displayName)
-                        .font(.system(size: 17, weight: .semibold))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        SearchView()
-                            .environmentObject(viewModel)
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.primary)
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink {
-                        AnalyticsDashboardView()
-                    } label: {
-                        Image(systemName: "chart.bar.fill")
-                            .foregroundColor(.primary)
+                    HStack(spacing: 6) {
+                        Text(viewModel.currentChannel.displayName)
+                            .font(.system(size: 17, weight: .semibold))
+                        if let filter = viewModel.activeTagFilter {
+                            Image(systemName: "line.horizontal.3.decrease.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundColor(viewModel.currentChannel.accentColor)
+                            Text(filter)
+                                .font(.system(size: 12))
+                                .foregroundColor(viewModel.currentChannel.accentColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(viewModel.currentChannel.accentColor.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
                     }
                 }
             }
@@ -53,6 +54,63 @@ struct FeedView: View {
                 await viewModel.loadInitialData()
             }
         }
+    }
+
+    private var tagFilterBar: some View {
+        let tags = viewModel.allTagsForFilter
+        guard !tags.isEmpty else {
+            return AnyView(EmptyView())
+        }
+        return AnyView(
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewModel.activeTagFilter = nil
+                            viewModel.applyTagFilter(nil)
+                        }
+                    } label: {
+                        Text("全部")
+                            .font(.system(size: 12, weight: viewModel.activeTagFilter == nil ? .semibold : .regular))
+                            .foregroundColor(viewModel.activeTagFilter == nil ? .white : .primary.opacity(0.7))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5)
+                            .background(
+                                viewModel.activeTagFilter == nil
+                                    ? viewModel.currentChannel.accentColor
+                                    : Constants.Colors.tagBackground
+                            )
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    ForEach(tags, id: \.self) { tag in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                let isActive = viewModel.activeTagFilter == tag
+                                viewModel.activeTagFilter = isActive ? nil : tag
+                                viewModel.applyTagFilter(isActive ? nil : tag)
+                            }
+                        } label: {
+                            Text(tag)
+                                .font(.system(size: 12, weight: viewModel.activeTagFilter == tag ? .semibold : .regular))
+                                .foregroundColor(viewModel.activeTagFilter == tag ? .white : .primary.opacity(0.7))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .background(
+                                    viewModel.activeTagFilter == tag
+                                        ? viewModel.currentChannel.accentColor
+                                        : Constants.Colors.tagBackground
+                                )
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, Constants.horizontalPadding)
+                .padding(.vertical, 8)
+            }
+        )
     }
 
     private var feedScrollView: some View {
@@ -71,6 +129,8 @@ struct FeedView: View {
                             onShare: { viewModel.incrementShare(for: ad.id) },
                             onTagTap: { tag in
                                 viewModel.trackTagClick(adId: ad.id, tagName: tag.name)
+                                viewModel.activeTagFilter = tag.name
+                                viewModel.applyTagFilter(tag.name)
                             },
                             isActive: activeVideoId == ad.id
                         )

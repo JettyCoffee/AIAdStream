@@ -8,18 +8,27 @@ final class SearchViewModel: ObservableObject {
     @Published var isSearching = false
     @Published var hasSearched = false
 
+    private let dataService = AdDataService()
     private let searchService = SearchService()
     private let analytics = AnalyticsService.shared
 
-    func search(ads: [AdItem]) async {
-        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-            results = ads
+    func search() async {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            results = []
             return
         }
         isSearching = true
         hasSearched = true
-        results = await searchService.search(query: query, ads: ads)
         analytics.track(.search, metadata: query)
+
+        let dbResults = dataService.searchAds(query: trimmed, channel: nil)
+        if !dbResults.isEmpty {
+            results = dbResults
+        } else {
+            let allAds = dataService.allAdsAcrossChannels()
+            results = await searchService.search(query: trimmed, ads: allAds)
+        }
         isSearching = false
     }
 }

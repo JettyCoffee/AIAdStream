@@ -22,14 +22,9 @@ struct AnalyticsEvent: Identifiable, Codable {
 final class AnalyticsService {
     static let shared = AnalyticsService()
 
-    private var events: [AnalyticsEvent] = []
-    private let persistence = DataPersistence.shared
-    private let defaults = UserDefaults.standard
-    private let eventsKey = "analytics_events_data"
+    private let db = DatabaseManager.shared
 
-    private init() {
-        loadEvents()
-    }
+    private init() {}
 
     func track(_ type: AnalyticsEventType, adId: String? = nil, channel: Channel? = nil, metadata: String? = nil) {
         let event = AnalyticsEvent(
@@ -40,20 +35,15 @@ final class AnalyticsService {
             timestamp: Date(),
             metadata: metadata
         )
-        events.append(event)
-        persistEvents()
+        db.insertAnalyticsEvent(event)
     }
 
     func impressionCount() -> Int {
-        events.filter { $0.type == .impression }.count
+        allEvents().filter { $0.type == .impression }.count
     }
 
     func clickCount() -> Int {
-        events.filter { $0.type == .click }.count
-    }
-
-    func likeCount() -> Int {
-        events.filter { $0.type == .like }.count
+        allEvents().filter { $0.type == .click }.count
     }
 
     func ctr() -> Double {
@@ -63,15 +53,17 @@ final class AnalyticsService {
     }
 
     func channelBreakdown() -> [(channel: String, impressions: Int, clicks: Int)] {
+        let events = allEvents()
         let grouped = Dictionary(grouping: events.filter { $0.channel != nil }) { $0.channel! }
-        return grouped.map { channel, events in
-            let imps = events.filter { $0.type == .impression }.count
-            let clks = events.filter { $0.type == .click }.count
+        return grouped.map { channel, evts in
+            let imps = evts.filter { $0.type == .impression }.count
+            let clks = evts.filter { $0.type == .click }.count
             return (channel, imps, clks)
         }.sorted { $0.impressions > $1.impressions }
     }
 
     func topInteractedAds(limit: Int = 5) -> [(adId: String, count: Int)] {
+        let events = allEvents()
         let adEvents = events.filter { $0.adId != nil }
         let grouped = Dictionary(grouping: adEvents) { $0.adId! }
         return grouped.map { ($0.key, $0.value.count) }
@@ -80,18 +72,7 @@ final class AnalyticsService {
             .map { $0 }
     }
 
-    func allEvents() -> [AnalyticsEvent] { events }
-
-    private func persistEvents() {
-        if let data = try? JSONEncoder().encode(events) {
-            defaults.set(data, forKey: eventsKey)
-        }
-    }
-
-    private func loadEvents() {
-        guard let data = defaults.data(forKey: eventsKey),
-              let saved = try? JSONDecoder().decode([AnalyticsEvent].self, from: data)
-        else { return }
-        events = saved
+    func allEvents() -> [AnalyticsEvent] {
+        db.fetchAnalyticsEvents()
     }
 }

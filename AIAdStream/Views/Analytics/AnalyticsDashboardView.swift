@@ -4,6 +4,7 @@ struct AnalyticsDashboardView: View {
     @StateObject private var viewModel = AnalyticsViewModel()
 
     var body: some View {
+        NavigationStack {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 overviewCards
@@ -27,6 +28,7 @@ struct AnalyticsDashboardView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.refresh()
+        }
         }
     }
 

@@ -1,24 +1,20 @@
 import Foundation
 
 final class AIService {
-    private let persistence = DataPersistence.shared
+    private let db = DatabaseManager.shared
 
     func generateSummary(for ad: AdItem) async -> String? {
-        if let cached = persistence.loadAICache()[ad.id]?.summary {
-            return cached
+        let existingTags = db.tagsForAd(ad.id)
+        if !existingTags.isEmpty, let summary = db.fetchAd(by: ad.id)?.aiSummary {
+            return summary
         }
-        let summary = buildFallbackSummary(for: ad)
-        cacheResult(adId: ad.id, summary: summary, tags: nil)
-        return summary
+        return buildFallbackSummary(for: ad)
     }
 
     func generateTags(for ad: AdItem) async -> [AITag] {
-        if let cached = persistence.loadAICache()[ad.id]?.tags, !cached.isEmpty {
-            return cached
-        }
-        let tags = buildFallbackTags(for: ad)
-        cacheResult(adId: ad.id, summary: nil, tags: tags)
-        return tags
+        let existing = db.tagsForAd(ad.id)
+        if !existing.isEmpty { return existing }
+        return buildFallbackTags(for: ad)
     }
 
     func conversationalSearch(query: String, ads: [AdItem]) async -> [AdItem] {
@@ -60,7 +56,9 @@ final class AIService {
             ("运动", .category), ("鞋", .category), ("数码", .category),
             ("美妆", .category), ("食品", .category), ("汽车", .category),
             ("服装", .category), ("护肤", .category), ("餐饮", .category),
-            ("家电", .category), ("玩具", .category),
+            ("家电", .category), ("玩具", .category), ("家居", .category),
+            ("旅行", .category), ("娱乐", .category), ("文化", .category),
+            ("零售", .category),
         ]
         for (kw, cat) in categoryRules {
             if text.contains(kw) && !tags.contains(where: { $0.name == kw }) {
@@ -69,7 +67,8 @@ final class AIService {
         }
         let styleRules: [(String, TagCategory)] = [
             ("简约", .style), ("复古", .style), ("科技", .style),
-            ("时尚", .style), ("文艺", .style),
+            ("时尚", .style), ("文艺", .style), ("经典", .style),
+            ("社交", .style),
         ]
         for (kw, cat) in styleRules {
             if text.contains(kw) && !tags.contains(where: { $0.name == kw }) {
@@ -78,7 +77,10 @@ final class AIService {
         }
         let audienceRules: [(String, TagCategory)] = [
             ("学生党", .audience), ("上班族", .audience), ("运动爱好者", .audience),
-            ("宝妈", .audience),
+            ("宝妈", .audience), ("都市丽人", .audience), ("摄影爱好者", .audience),
+            ("户外爱好者", .audience), ("文艺青年", .audience), ("科技爱好者", .audience),
+            ("潮流玩家", .audience), ("聚会达人", .audience), ("商务人士", .audience),
+            ("家庭食客", .audience), ("旅行爱好者", .audience),
         ]
         for (kw, cat) in audienceRules {
             if text.contains(kw) && !tags.contains(where: { $0.name == kw }) {
@@ -87,7 +89,9 @@ final class AIService {
         }
         let sceneRules: [(String, TagCategory)] = [
             ("通勤", .scene), ("健身", .scene), ("送礼", .scene),
-            ("聚会", .scene), ("居家", .scene),
+            ("聚会", .scene), ("居家", .scene), ("旅行", .scene),
+            ("购物", .scene), ("创作", .scene), ("户外", .scene),
+            ("周末出行", .scene), ("社交", .scene),
         ]
         for (kw, cat) in sceneRules {
             if text.contains(kw) && !tags.contains(where: { $0.name == kw }) {
@@ -111,15 +115,5 @@ final class AIService {
             .split(separator: " ")
             .map { String($0).trimmingCharacters(in: .whitespaces) }
             .filter { $0.count >= 1 && !stopWords.contains($0) }
-    }
-
-    private func cacheResult(adId: String, summary: String?, tags: [AITag]?) {
-        var cache = persistence.loadAICache()
-        let existing = cache[adId] ?? AICacheEntry(summary: nil, tags: [])
-        cache[adId] = AICacheEntry(
-            summary: summary ?? existing.summary,
-            tags: tags ?? existing.tags
-        )
-        persistence.saveAICache(cache)
     }
 }
