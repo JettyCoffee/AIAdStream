@@ -35,4 +35,8 @@ final class AdDataService {
     func allTags(for channel: Channel?) -> [String] {
         db.allTags(for: channel?.rawValue)
     }
+
+    func allTagsWithCategory(for channel: Channel?) -> [AITag] {
+        db.allTagsWithCategory(for: channel?.rawValue)
+    }
 }

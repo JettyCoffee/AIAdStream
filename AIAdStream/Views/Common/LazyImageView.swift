@@ -4,6 +4,10 @@ struct LazyImageView: View {
     let imageName: String
     let contentMode: ContentMode
 
+    @State private var loadedImage: UIImage?
+    @State private var loadFailed = false
+    @State private var taskRunning = false
+
     init(imageName: String, contentMode: ContentMode = .fill) {
         self.imageName = imageName
         self.contentMode = contentMode
@@ -11,12 +15,48 @@ struct LazyImageView: View {
 
     var body: some View {
         Group {
-            if let cached = ImageCache.shared.image(for: imageName) {
-                Image(uiImage: cached)
+            if let image = loadedImage ?? ImageCache.shared.image(for: imageName) {
+                Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
+            } else if loadFailed {
+                placeholderView
             } else {
                 placeholderView
+                    .onAppear(perform: startLoad)
+            }
+        }
+    }
+
+    private func startLoad() {
+        guard !taskRunning else { return }
+        guard loadedImage == nil, ImageCache.shared.image(for: imageName) == nil else { return }
+
+        guard imageName.hasPrefix("https://") || imageName.hasPrefix("http://") else {
+            loadFailed = true
+            return
+        }
+
+        guard let url = URL(string: imageName) else {
+            loadFailed = true
+            return
+        }
+
+        taskRunning = true
+        Task {
+            defer { taskRunning = false }
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let image = UIImage(data: data) {
+                    ImageCache.shared.setImage(image, for: imageName)
+                    await MainActor.run {
+                        self.loadedImage = image
+                    }
+                } else {
+                    await MainActor.run { self.loadFailed = true }
+                }
+            } catch {
+                await MainActor.run { self.loadFailed = true }
             }
         }
     }
@@ -35,7 +75,7 @@ struct LazyImageView: View {
         Rectangle()
             .fill(colors[colorIndex])
             .overlay {
-                Image(systemName: "photo")
+                Image(systemName: loadFailed ? "photo.badge.exclamationmark" : "photo")
                     .font(.system(size: 32))
                     .foregroundColor(.white.opacity(0.6))
             }

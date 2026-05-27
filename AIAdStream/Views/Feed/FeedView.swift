@@ -17,11 +17,6 @@ struct FeedView: View {
                 Divider()
                     .foregroundColor(Constants.Colors.separator)
 
-                tagFilterBar
-
-                Divider()
-                    .foregroundColor(Constants.Colors.separator)
-
                 if viewModel.ads.isEmpty && !viewModel.isLoading {
                     emptyStateView
                 } else {
@@ -32,22 +27,11 @@ struct FeedView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    HStack(spacing: 6) {
-                        Text(viewModel.currentChannel.displayName)
-                            .font(.system(size: 17, weight: .semibold))
-                        if let filter = viewModel.activeTagFilter {
-                            Image(systemName: "line.horizontal.3.decrease.circle.fill")
-                                .font(.system(size: 13))
-                                .foregroundColor(viewModel.currentChannel.accentColor)
-                            Text(filter)
-                                .font(.system(size: 12))
-                                .foregroundColor(viewModel.currentChannel.accentColor)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(viewModel.currentChannel.accentColor.opacity(0.12))
-                                .clipShape(Capsule())
-                        }
-                    }
+                    Text("AIAdStream")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    filterMenu
                 }
             }
             .task {
@@ -56,61 +40,46 @@ struct FeedView: View {
         }
     }
 
-    private var tagFilterBar: some View {
-        let tags = viewModel.allTagsForFilter
-        guard !tags.isEmpty else {
-            return AnyView(EmptyView())
-        }
-        return AnyView(
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            viewModel.activeTagFilter = nil
-                            viewModel.applyTagFilter(nil)
-                        }
-                    } label: {
-                        Text("全部")
-                            .font(.system(size: 12, weight: viewModel.activeTagFilter == nil ? .semibold : .regular))
-                            .foregroundColor(viewModel.activeTagFilter == nil ? .white : .primary.opacity(0.7))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 5)
-                            .background(
-                                viewModel.activeTagFilter == nil
-                                    ? viewModel.currentChannel.accentColor
-                                    : Constants.Colors.tagBackground
-                            )
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-
-                    ForEach(tags, id: \.self) { tag in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                let isActive = viewModel.activeTagFilter == tag
-                                viewModel.activeTagFilter = isActive ? nil : tag
-                                viewModel.applyTagFilter(isActive ? nil : tag)
-                            }
-                        } label: {
-                            Text(tag)
-                                .font(.system(size: 12, weight: viewModel.activeTagFilter == tag ? .semibold : .regular))
-                                .foregroundColor(viewModel.activeTagFilter == tag ? .white : .primary.opacity(0.7))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 5)
-                                .background(
-                                    viewModel.activeTagFilter == tag
-                                        ? viewModel.currentChannel.accentColor
-                                        : Constants.Colors.tagBackground
-                                )
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
+    private var filterMenu: some View {
+        Menu {
+            Button {
+                viewModel.activeTagFilter = nil
+                viewModel.applyTagFilter(nil)
+            } label: {
+                HStack {
+                    Text("全部")
+                    if viewModel.activeTagFilter == nil {
+                        Image(systemName: "checkmark")
                     }
                 }
-                .padding(.horizontal, Constants.horizontalPadding)
-                .padding(.vertical, 8)
             }
-        )
+
+            ForEach(viewModel.tagsGroupedByCategory, id: \.category) { group in
+                Section(group.category.displayName) {
+                    ForEach(group.tags, id: \.self) { tag in
+                        Button {
+                            viewModel.activeTagFilter = tag
+                            viewModel.applyTagFilter(tag)
+                        } label: {
+                            HStack {
+                                Text(tag)
+                                if viewModel.activeTagFilter == tag {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: viewModel.activeTagFilter != nil
+                ? "line.3.horizontal.decrease.circle.fill"
+                : "line.3.horizontal.decrease")
+                .font(.system(size: 17))
+                .foregroundColor(viewModel.activeTagFilter != nil
+                    ? viewModel.currentChannel.accentColor
+                    : .primary)
+        }
     }
 
     private var feedScrollView: some View {

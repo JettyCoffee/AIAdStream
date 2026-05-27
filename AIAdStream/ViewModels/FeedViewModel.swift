@@ -150,6 +150,15 @@ final class FeedViewModel: ObservableObject {
         dataService.allTags(for: currentChannel)
     }
 
+    var tagsGroupedByCategory: [(category: TagCategory, tags: [String])] {
+        let allTags = dataService.allTagsWithCategory(for: currentChannel)
+        let grouped = Dictionary(grouping: allTags) { $0.category }
+        return TagCategory.allCases.compactMap { category in
+            let tags = grouped[category]?.map(\.name) ?? []
+            return tags.isEmpty ? nil : (category, tags)
+        }
+    }
+
     var allAdsAcrossChannels: [AdItem] {
         dataService.allAdsAcrossChannels()
     }

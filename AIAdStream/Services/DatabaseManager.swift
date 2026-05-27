@@ -259,6 +259,37 @@ final class DatabaseManager {
         return result
     }
 
+    func allTagsWithCategory(for channel: String?) -> [AITag] {
+        var result: [AITag] = []
+        dbQueue.sync {
+            let sql: String
+            var params: [String] = []
+            if let ch = channel {
+                sql = """
+                SELECT DISTINCT t.name, t.category FROM ad_tags t
+                JOIN ad_items a ON t.ad_id = a.id
+                WHERE a.channel = ?
+                """
+                params.append(ch)
+            } else {
+                sql = "SELECT DISTINCT name, category FROM ad_tags"
+            }
+            let rows = executeQuery(sql) { stmt in
+                for (i, param) in params.enumerated() {
+                    sqlite3_bind_text(stmt, Int32(i + 1), (param as NSString).utf8String, -1, nil)
+                }
+            }
+            result = rows.map { row in
+                AITag(
+                    id: UUID().uuidString,
+                    name: row["name"] as? String ?? "",
+                    category: TagCategory(rawValue: row["category"] as? String ?? "category") ?? .category
+                )
+            }
+        }
+        return result
+    }
+
     // MARK: - Interaction Queries
 
     func loadInteractionState(for adId: String) -> InteractionState {
