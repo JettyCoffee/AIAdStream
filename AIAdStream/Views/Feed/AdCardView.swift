@@ -8,6 +8,7 @@ struct AdCardView: View {
     let onShare: () -> Void
     let onTagTap: (AITag) -> Void
     let isActive: Bool
+    var activeTagFilter: String?
 
     var body: some View {
         Group {
@@ -19,7 +20,8 @@ struct AdCardView: View {
                     onLike: onLike,
                     onCollect: onCollect,
                     onShare: onShare,
-                    onTagTap: onTagTap
+                    onTagTap: onTagTap,
+                    activeTagFilter: activeTagFilter
                 )
             case .smallImage:
                 SmallImageCard(
@@ -28,7 +30,8 @@ struct AdCardView: View {
                     onLike: onLike,
                     onCollect: onCollect,
                     onShare: onShare,
-                    onTagTap: onTagTap
+                    onTagTap: onTagTap,
+                    activeTagFilter: activeTagFilter
                 )
             case .video:
                 VideoCard(
@@ -38,7 +41,8 @@ struct AdCardView: View {
                     onCollect: onCollect,
                     onShare: onShare,
                     onTagTap: onTagTap,
-                    isActive: isActive
+                    isActive: isActive,
+                    activeTagFilter: activeTagFilter
                 )
             }
         }

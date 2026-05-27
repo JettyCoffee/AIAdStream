@@ -7,6 +7,7 @@ struct BigImageCard: View {
     let onCollect: () -> Void
     let onShare: () -> Void
     let onTagTap: (AITag) -> Void
+    var activeTagFilter: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,6 +36,14 @@ struct BigImageCard: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
+                TagRow(
+                    tags: ad.tags,
+                    highlightedTagName: activeTagFilter,
+                    highlightColor: ad.channel.accentColor,
+                    onTagTap: onTagTap
+                )
+                .padding(.top, 8)
+
                 if let summary = ad.aiSummary {
                     Text(summary)
                         .font(.system(size: 13))
@@ -43,9 +52,6 @@ struct BigImageCard: View {
                         .padding(.horizontal, Constants.horizontalPadding)
                 }
 
-                TagRow(tags: ad.tags, onTagTap: onTagTap)
-                    .padding(.top, ad.aiSummary == nil ? 8 : 0)
-
                 InteractionBar(
                     adId: ad.id,
                     state: interactionState,
@@ -53,10 +59,10 @@ struct BigImageCard: View {
                     onCollect: onCollect,
                     onShare: onShare
                 )
+                .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.horizontal, Constants.horizontalPadding)
                 .padding(.vertical, 8)
             }
-            .padding(.top, 8)
             .padding(.bottom, 4)
             .background(.white)
         }

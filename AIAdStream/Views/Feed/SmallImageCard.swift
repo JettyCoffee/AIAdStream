@@ -7,6 +7,7 @@ struct SmallImageCard: View {
     let onCollect: () -> Void
     let onShare: () -> Void
     let onTagTap: (AITag) -> Void
+    var activeTagFilter: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -35,7 +36,11 @@ struct SmallImageCard: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(ad.tags.prefix(3)) { tag in
-                                TagChipView(tag: tag) { onTagTap(tag) }
+                                TagChipView(
+                                    tag: tag,
+                                    isHighlighted: tag.name == activeTagFilter,
+                                    highlightColor: ad.channel.accentColor
+                                ) { onTagTap(tag) }
                             }
                         }
                     }

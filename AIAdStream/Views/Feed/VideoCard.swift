@@ -9,6 +9,7 @@ struct VideoCard: View {
     let onShare: () -> Void
     let onTagTap: (AITag) -> Void
     let isActive: Bool
+    var activeTagFilter: String?
 
     @State private var isPlaying = false
     @State private var isMuted = true
@@ -82,7 +83,12 @@ struct VideoCard: View {
                     .padding(.horizontal, Constants.horizontalPadding)
 
                 if !ad.tags.isEmpty {
-                    TagRow(tags: ad.tags, onTagTap: onTagTap)
+                    TagRow(
+                        tags: ad.tags,
+                        highlightedTagName: activeTagFilter,
+                        highlightColor: ad.channel.accentColor,
+                        onTagTap: onTagTap
+                    )
                 }
 
                 InteractionBar(

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TagChipView: View {
     let tag: AITag
+    var isHighlighted: Bool = false
+    var highlightColor: Color = .blue
     var onTap: (() -> Void)?
 
     var body: some View {
@@ -10,10 +12,10 @@ struct TagChipView: View {
         } label: {
             Text(tag.name)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.primary.opacity(0.7))
+                .foregroundColor(isHighlighted ? .white : .primary.opacity(0.7))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(Constants.Colors.tagBackground)
+                .background(isHighlighted ? highlightColor : Constants.Colors.tagBackground)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -22,6 +24,8 @@ struct TagChipView: View {
 
 struct TagRow: View {
     let tags: [AITag]
+    var highlightedTagName: String?
+    var highlightColor: Color = .blue
     var onTagTap: ((AITag) -> Void)?
 
     var body: some View {
@@ -29,7 +33,11 @@ struct TagRow: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Constants.tagSpacing) {
                     ForEach(tags) { tag in
-                        TagChipView(tag: tag) {
+                        TagChipView(
+                            tag: tag,
+                            isHighlighted: tag.name == highlightedTagName,
+                            highlightColor: highlightColor
+                        ) {
                             onTagTap?(tag)
                         }
                     }

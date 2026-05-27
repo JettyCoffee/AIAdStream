@@ -42,7 +42,7 @@ struct InteractionBar: View {
             Button {
                 onCollect?()
             } label: {
-                Image(systemName: state.isCollected ? "bookmark.fill" : "bookmark")
+                Image(systemName: state.isCollected ? "star.fill" : "star")
                     .foregroundColor(state.isCollected ? .orange : .primary.opacity(0.6))
                     .font(.system(size: 16))
                     .padding(.vertical, 6)

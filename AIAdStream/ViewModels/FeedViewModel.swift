@@ -88,42 +88,59 @@ final class FeedViewModel: ObservableObject {
     }
 
     func toggleLike(for adId: String) {
+        guard let ad = findAd(by: adId) else { return }
         var state = interactionState(for: adId)
+        let wasLiked = state.isLiked
         state.isLiked.toggle()
         state.likeCount += state.isLiked ? 1 : -1
         update(state, for: adId)
-        analytics.track(.like, adId: adId, channel: currentChannel)
+        analytics.trackWithAdContext(.like, ad: ad, channel: currentChannel)
+        analytics.trackStateChange(ad: ad, field: "isLiked", from: "\(wasLiked)", to: "\(state.isLiked)")
     }
 
     func toggleCollect(for adId: String) {
+        guard let ad = findAd(by: adId) else { return }
         var state = interactionState(for: adId)
+        let wasCollected = state.isCollected
         state.isCollected.toggle()
         update(state, for: adId)
-        analytics.track(.collect, adId: adId, channel: currentChannel)
+        analytics.trackWithAdContext(.collect, ad: ad, channel: currentChannel)
+        analytics.trackStateChange(ad: ad, field: "isCollected", from: "\(wasCollected)", to: "\(state.isCollected)")
     }
 
     func incrementShare(for adId: String) {
+        guard let ad = findAd(by: adId) else { return }
         var state = interactionState(for: adId)
+        let oldCount = state.shareCount
         state.shareCount += 1
         update(state, for: adId)
-        analytics.track(.share, adId: adId, channel: currentChannel)
+        analytics.trackWithAdContext(.share, ad: ad, channel: currentChannel)
+        analytics.trackStateChange(ad: ad, field: "shareCount", from: "\(oldCount)", to: "\(state.shareCount)")
     }
 
     func trackImpression(adId: String) {
-        analytics.track(.impression, adId: adId, channel: currentChannel)
+        guard let ad = findAd(by: adId) else { return }
+        analytics.trackWithAdContext(.impression, ad: ad, channel: currentChannel)
     }
 
     func trackClick(adId: String) {
-        analytics.track(.click, adId: adId, channel: currentChannel)
+        guard let ad = findAd(by: adId) else { return }
+        analytics.trackWithAdContext(.click, ad: ad, channel: currentChannel)
     }
 
     func trackTagClick(adId: String, tagName: String) {
-        analytics.track(.tagClick, adId: adId, channel: currentChannel, metadata: tagName)
+        guard let ad = findAd(by: adId) else { return }
+        analytics.trackWithAdContext(.tagClick, ad: ad, channel: currentChannel, extra: tagName)
     }
 
     private func update(_ state: InteractionState, for adId: String) {
         interactionStates[adId] = state
         db.saveInteractionState(state, for: adId)
+    }
+
+    private func findAd(by id: String) -> AdItem? {
+        if let ad = ads.first(where: { $0.id == id }) { return ad }
+        return dataService.fetchAd(by: id)
     }
 
     private func generateTagsForVisibleAds() async {

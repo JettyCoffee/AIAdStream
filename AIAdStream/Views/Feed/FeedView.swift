@@ -101,7 +101,8 @@ struct FeedView: View {
                                 viewModel.activeTagFilter = tag.name
                                 viewModel.applyTagFilter(tag.name)
                             },
-                            isActive: activeVideoId == ad.id
+                            isActive: activeVideoId == ad.id,
+                            activeTagFilter: viewModel.activeTagFilter
                         )
                     }
                     .buttonStyle(.plain)
