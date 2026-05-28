@@ -3,6 +3,7 @@ import SwiftUI
 struct FeedView: View {
     @EnvironmentObject var viewModel: FeedViewModel
     @State private var activeVideoId: String?
+    @State private var lastVisibleAdId: String?
 
     var body: some View {
         NavigationStack {
@@ -16,6 +17,10 @@ struct FeedView: View {
 
                 Divider()
                     .foregroundColor(Constants.Colors.separator)
+
+                if viewModel.isFiltering {
+                    filterLoadingBar
+                }
 
                 if viewModel.ads.isEmpty && !viewModel.isLoading {
                     emptyStateView
@@ -83,54 +88,76 @@ struct FeedView: View {
     }
 
     private var feedScrollView: some View {
-        ScrollView {
-            LazyVStack(spacing: Constants.cardSpacing) {
-                ForEach(viewModel.ads) { ad in
-                    NavigationLink {
-                        AdDetailView(ad: ad)
-                            .environmentObject(viewModel)
-                    } label: {
-                        AdCardView(
-                            ad: ad,
-                            interactionState: bindingForAd(ad.id),
-                            onLike: { viewModel.toggleLike(for: ad.id) },
-                            onCollect: { viewModel.toggleCollect(for: ad.id) },
-                            onShare: { viewModel.incrementShare(for: ad.id) },
-                            onTagTap: { tag in
-                                viewModel.trackTagClick(adId: ad.id, tagName: tag.name)
-                                viewModel.activeTagFilter = tag.name
-                                viewModel.applyTagFilter(tag.name)
-                            },
-                            isActive: activeVideoId == ad.id,
-                            activeTagFilter: viewModel.activeTagFilter
-                        )
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: Constants.cardSpacing) {
+                    ForEach(viewModel.ads) { ad in
+                        NavigationLink {
+                            AdDetailView(ad: ad)
+                                .environmentObject(viewModel)
+                        } label: {
+                            AdCardView(
+                                ad: ad,
+                                interactionState: bindingForAd(ad.id),
+                                onLike: { viewModel.toggleLike(for: ad.id) },
+                                onCollect: { viewModel.toggleCollect(for: ad.id) },
+                                onShare: { viewModel.incrementShare(for: ad.id) },
+                                onTagTap: { tag in
+                                    viewModel.trackTagClick(adId: ad.id, tagName: tag.name)
+                                    viewModel.activeTagFilter = tag.name
+                                    viewModel.applyTagFilter(tag.name)
+                                },
+                                isActive: activeVideoId == ad.id,
+                                activeTagFilter: viewModel.activeTagFilter
+                            )
+                        }
+                        .buttonStyle(CardPressStyle())
+                        .id(ad.id)
+                        .onAppear {
+                            lastVisibleAdId = ad.id
+                            viewModel.trackImpression(adId: ad.id)
+                            if ad.cardType == .video {
+                                activeVideoId = ad.id
+                            }
+                            Task {
+                                await viewModel.loadMoreIfNeeded(currentItem: ad)
+                            }
+                        }
+                        .onDisappear {
+                            if ad.cardType == .video && activeVideoId == ad.id {
+                                activeVideoId = nil
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .onAppear {
-                        viewModel.trackImpression(adId: ad.id)
-                        if ad.cardType == .video {
-                            activeVideoId = ad.id
-                        }
-                        Task {
-                            await viewModel.loadMoreIfNeeded(currentItem: ad)
-                        }
-                    }
-                    .onDisappear {
-                        if ad.cardType == .video && activeVideoId == ad.id {
-                            activeVideoId = nil
-                        }
+
+                    if viewModel.hasMore {
+                        LoadingFooterView()
                     }
                 }
-
-                if viewModel.hasMore {
-                    LoadingFooterView()
+                .padding(.vertical, 8)
+            }
+            .refreshable {
+                await viewModel.refresh()
+            }
+            .onAppear {
+                if let targetId = lastVisibleAdId {
+                    proxy.scrollTo(targetId, anchor: .top)
                 }
             }
-            .padding(.vertical, 8)
         }
-        .refreshable {
-            await viewModel.refresh()
+    }
+
+    private var filterLoadingBar: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .scaleEffect(0.7)
+            Text("筛选加载中...")
+                .font(.system(size: 12))
+                .foregroundColor(Constants.Colors.secondaryText)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(viewModel.currentChannel.accentColor.opacity(0.08))
     }
 
     private var emptyStateView: some View {
@@ -150,5 +177,14 @@ struct FeedView: View {
             get: { viewModel.interactionState(for: adId) },
             set: { viewModel.interactionStates[adId] = $0 }
         )
+    }
+}
+
+struct CardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }

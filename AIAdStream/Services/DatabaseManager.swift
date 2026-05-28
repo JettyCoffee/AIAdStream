@@ -292,6 +292,40 @@ final class DatabaseManager {
         return result
     }
 
+    /// 按多个标签检索广告，返回按匹配标签数量降序排列的结果
+    func fetchAdsByTags(_ tags: [String], channel: String?, limit: Int = 20) -> [AdItem] {
+        guard !tags.isEmpty else { return [] }
+        var result: [AdItem] = []
+        dbQueue.sync {
+            let placeholders = tags.map { _ in "?" }.joined(separator: ",")
+            var sql = """
+            SELECT a.*, COUNT(DISTINCT t.name) AS match_count
+            FROM ad_items a
+            JOIN ad_tags t ON a.id = t.ad_id
+            WHERE t.name IN (\(placeholders))
+            """
+            if channel != nil {
+                sql += " AND a.channel = ?"
+            }
+            sql += " GROUP BY a.id ORDER BY match_count DESC LIMIT ?"
+
+            let rows = executeQuery(sql) { stmt in
+                var idx: Int32 = 1
+                for tag in tags {
+                    sqlite3_bind_text(stmt, idx, (tag as NSString).utf8String, -1, nil)
+                    idx += 1
+                }
+                if let ch = channel {
+                    sqlite3_bind_text(stmt, idx, (ch as NSString).utf8String, -1, nil)
+                    idx += 1
+                }
+                sqlite3_bind_int64(stmt, idx, Int64(limit))
+            }
+            result = rows.map { rowToAdItem($0) }
+        }
+        return result
+    }
+
     // MARK: - Tag Queries
 
     func tagsForAd(_ adId: String) -> [AITag] {

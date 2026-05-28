@@ -18,19 +18,12 @@ struct VideoCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
-                Rectangle()
-                    .fill(.black)
-                    .frame(height: 260)
-
+                Rectangle().fill(.black)
                 if let player = player {
                     VideoPlayerView(player: player)
-                        .frame(height: 260)
                 }
-
                 if !isPlaying {
-                    LazyImageView(imageName: ad.imageURL, contentMode: .fill)
-                        .frame(height: 260)
-                        .clipped()
+                    LazyImageView(imageName: ad.imageURL, contentMode: .fill).clipped()
                 }
 
                 LinearGradient(
@@ -38,7 +31,6 @@ struct VideoCard: View {
                     startPoint: .center,
                     endPoint: .bottom
                 )
-                .frame(height: 260)
 
                 if !isPlaying {
                     Image(systemName: "play.circle.fill")
@@ -57,6 +49,8 @@ struct VideoCard: View {
                                 .font(.system(size: 22))
                                 .foregroundColor(.white)
                         }
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
 
                         Spacer()
 
@@ -71,16 +65,35 @@ struct VideoCard: View {
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
                         }
+                        .frame(width: 44, height: 44)
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 8)
                 }
             }
+            .frame(height: 260)
+            .highPriorityGesture(
+                TapGesture().onEnded {
+                    if !isPlaying {
+                        setupPlayer()
+                        player?.play()
+                        isPlaying = true
+                    }
+                }
+            )
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(ad.title)
                     .font(.system(size: 16, weight: .semibold))
                     .padding(.horizontal, Constants.horizontalPadding)
+
+                if let summary = ad.aiSummary {
+                    Text(summary)
+                        .font(.system(size: 13))
+                        .foregroundColor(Constants.Colors.secondaryText)
+                        .lineLimit(2)
+                        .padding(.horizontal, Constants.horizontalPadding)
+                }
 
                 if !ad.tags.isEmpty {
                     TagRow(
@@ -124,20 +137,12 @@ struct VideoCard: View {
             player?.pause()
             cleanupPlayer()
         }
-        .onTapGesture {
-            if !isPlaying {
-                setupPlayer()
-                player?.play()
-                isPlaying = true
-            }
-        }
     }
 
     private func setupPlayer() {
         guard player == nil, let url = URL(string: ad.videoURL ?? "") else { return }
         let p = VideoPlayerPool.shared.dequeuePlayer()
-        let item = AVPlayerItem(url: url)
-        p.replaceCurrentItem(with: item)
+        p.replaceCurrentItem(with: AVPlayerItem(url: url))
         p.isMuted = isMuted
         self.player = p
     }

@@ -12,6 +12,8 @@ final class FeedViewModel: ObservableObject {
     @Published var selectedAd: AdItem?
     @Published var activeTagFilter: String?
 
+    @Published var isFiltering = false
+
     private let dataService = AdDataService()
     private let aiService = AIService()
     private let analytics = AnalyticsService.shared
@@ -56,12 +58,14 @@ final class FeedViewModel: ObservableObject {
     }
 
     func applyTagFilter(_ tagName: String?) {
+        guard activeTagFilter != tagName else { return }
         activeTagFilter = tagName
         currentPage = 0
         hasMore = true
-        ads = []
+        isFiltering = true
         Task {
             await loadPage(1)
+            isFiltering = false
         }
     }
 

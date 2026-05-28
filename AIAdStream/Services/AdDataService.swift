@@ -4,8 +4,6 @@ final class AdDataService {
     private let db = DatabaseManager.shared
 
     func fetchAds(channel: Channel, page: Int, pageSize: Int, tagFilter: String? = nil) async throws -> AdPage {
-        try await Task.sleep(nanoseconds: UInt64.random(in: 300_000_000...800_000_000))
-
         let offset = (page - 1) * pageSize
         let result = db.fetchAds(channel: channel.rawValue, offset: offset, limit: pageSize, tagFilter: tagFilter)
         let hasMore = offset + pageSize < result.total

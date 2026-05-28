@@ -18,21 +18,23 @@ final class AIService {
     }
 
     func conversationalSearch(query: String, ads: [AdItem]) async -> [AdItem] {
-        let lowercased = query.lowercased()
+        // 通过 Qwen 端侧模型（或 fallback 模糊匹配）将自然语言转为标签
+        let tags = await QwenService.shared.extractTags(from: query)
+
+        if !tags.isEmpty {
+            // 标签管道检索：按匹配标签数降序返回
+            let results = db.fetchAdsByTags(tags, channel: nil, limit: 20)
+            if !results.isEmpty { return results }
+        }
+
+        // Fallback：关键词打分
         let keywords = extractKeywords(from: query)
+        let lowercased = query.lowercased()
         let scored = ads.map { ad -> (AdItem, Int) in
             var score = 0
             let text = "\(ad.title) \(ad.description) \(ad.sponsor)".lowercased()
             for kw in keywords {
                 if text.contains(kw) { score += 10 }
-            }
-            for kw in keywords {
-                if ad.title.lowercased().contains(kw) { score += 15 }
-            }
-            for tag in ad.tags {
-                if keywords.contains(where: { tag.name.contains($0) || $0.contains(tag.name) }) {
-                    score += 12
-                }
             }
             if lowercased.contains("视频") && ad.cardType == .video { score += 8 }
             if lowercased.contains("图片") && ad.cardType != .video { score += 5 }
