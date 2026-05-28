@@ -100,68 +100,96 @@ final class DatabaseManager {
         }
     }
 
-    private func seedIfNeeded() {
-        let count = executeScalar("SELECT COUNT(*) FROM ad_items")
-        guard count == 0 else { return }
+    private static let seedVersionKey = "com.aiadstream.seed_version"
+    /// 当前种子数据版本号，升级种子库时递增
+    private static let currentSeedVersion = 2
 
-        guard let seedPath = Bundle.main.path(forResource: "seed_ads", ofType: "sqlite") else {
-            print("[DB] Seed database not found in bundle")
+    private func seedIfNeeded() {
+        let storedVersion = UserDefaults.standard.integer(forKey: Self.seedVersionKey)
+        let adCount = executeScalar("SELECT COUNT(*) FROM ad_items")
+        let needsSeed = adCount == 0 || (storedVersion < Self.currentSeedVersion && adCount > 0)
+
+        guard needsSeed else {
+            print("[DB] Seed up-to-date (version \(storedVersion), \(adCount) ads)")
             return
         }
+
+        if adCount > 0 {
+            print("[DB] Re-seeding: clearing \(adCount) old ads for version \(storedVersion) → \(Self.currentSeedVersion)")
+            executeUpdate("DELETE FROM ad_tags") { _ in }
+            executeUpdate("DELETE FROM ad_items") { _ in }
+        }
+
+        guard let seedURL = Bundle.main.url(forResource: "seed_ads", withExtension: "sqlite") else {
+            print("[DB] ERROR: seed_ads.sqlite not found in bundle. Bundle resources: \(Bundle.main.urls(forResourcesWithExtension: nil, subdirectory: nil) ?? [])")
+            return
+        }
+
+        print("[DB] Found seed database at: \(seedURL.path)")
 
         var seedDB: OpaquePointer?
-        guard sqlite3_open(seedPath, &seedDB) == SQLITE_OK else {
-            print("[DB] Failed to open seed database")
+        guard sqlite3_open(seedURL.path, &seedDB) == SQLITE_OK else {
+            print("[DB] ERROR: Failed to open seed database")
             return
         }
+        defer { sqlite3_close(seedDB) }
+
+        guard let db = db else {
+            print("[DB] ERROR: Working database not open")
+            return
+        }
+
+        // BEGIN TRANSACTION for performance
+        sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
 
         var totalAds = 0
         var totalTags = 0
 
-        if let db = db {
-            // 查询种子库中的广告数据
-            var queryStmt: OpaquePointer?
-            if sqlite3_prepare_v2(seedDB, "SELECT id, title, description, image_url, video_url, card_type, channel, sponsor, cta_text FROM ad_items", -1, &queryStmt, nil) == SQLITE_OK {
-                while sqlite3_step(queryStmt) == SQLITE_ROW {
-                    var insertStmt: OpaquePointer?
-                    let insertSQL = "INSERT OR REPLACE INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, cta_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                    if sqlite3_prepare_v2(db, insertSQL, -1, &insertStmt, nil) == SQLITE_OK {
-                        for i in 0..<9 {
-                            if sqlite3_column_type(queryStmt, Int32(i)) == SQLITE_NULL {
-                                sqlite3_bind_null(insertStmt, Int32(i + 1))
-                            } else {
-                                sqlite3_bind_text(insertStmt, Int32(i + 1), sqlite3_column_text(queryStmt, Int32(i)), -1, nil)
-                            }
-                        }
-                        sqlite3_step(insertStmt)
-                        totalAds += 1
-                    }
-                    sqlite3_finalize(insertStmt)
-                }
-            }
-            sqlite3_finalize(queryStmt)
+        // 导入广告数据
+        var queryStmt: OpaquePointer?
+        if sqlite3_prepare_v2(seedDB,
+            "SELECT id, title, description, image_url, video_url, card_type, channel, sponsor, cta_text FROM ad_items",
+            -1, &queryStmt, nil) == SQLITE_OK {
+            defer { sqlite3_finalize(queryStmt) }
 
-            // 查询种子库中的标签数据
-            var tagStmt: OpaquePointer?
-            if sqlite3_prepare_v2(seedDB, "SELECT id, ad_id, name, category FROM ad_tags", -1, &tagStmt, nil) == SQLITE_OK {
-                while sqlite3_step(tagStmt) == SQLITE_ROW {
-                    var insertStmt: OpaquePointer?
-                    let insertSQL = "INSERT OR REPLACE INTO ad_tags (id, ad_id, name, category) VALUES (?, ?, ?, ?)"
-                    if sqlite3_prepare_v2(db, insertSQL, -1, &insertStmt, nil) == SQLITE_OK {
-                        for i in 0..<4 {
-                            sqlite3_bind_text(insertStmt, Int32(i + 1), sqlite3_column_text(tagStmt, Int32(i)), -1, nil)
+            while sqlite3_step(queryStmt) == SQLITE_ROW {
+                var insertStmt: OpaquePointer?
+                let sql = "INSERT INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, cta_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                if sqlite3_prepare_v2(db, sql, -1, &insertStmt, nil) == SQLITE_OK {
+                    defer { sqlite3_finalize(insertStmt) }
+                    for i in 0..<9 {
+                        if sqlite3_column_type(queryStmt, Int32(i)) == SQLITE_NULL {
+                            sqlite3_bind_null(insertStmt, Int32(i + 1))
+                        } else {
+                            sqlite3_bind_text(insertStmt, Int32(i + 1), sqlite3_column_text(queryStmt, Int32(i)), -1, nil)
                         }
-                        sqlite3_step(insertStmt)
-                        totalTags += 1
                     }
-                    sqlite3_finalize(insertStmt)
+                    if sqlite3_step(insertStmt) == SQLITE_DONE { totalAds += 1 }
                 }
             }
-            sqlite3_finalize(tagStmt)
         }
 
-        sqlite3_close(seedDB)
-        print("[DB] Seeded \(totalAds) ads with \(totalTags) tags from bundled database")
+        // 导入标签数据
+        var tagStmt: OpaquePointer?
+        if sqlite3_prepare_v2(seedDB, "SELECT id, ad_id, name, category FROM ad_tags", -1, &tagStmt, nil) == SQLITE_OK {
+            defer { sqlite3_finalize(tagStmt) }
+
+            while sqlite3_step(tagStmt) == SQLITE_ROW {
+                var insertStmt: OpaquePointer?
+                let sql = "INSERT INTO ad_tags (id, ad_id, name, category) VALUES (?, ?, ?, ?)"
+                if sqlite3_prepare_v2(db, sql, -1, &insertStmt, nil) == SQLITE_OK {
+                    defer { sqlite3_finalize(insertStmt) }
+                    for i in 0..<4 {
+                        sqlite3_bind_text(insertStmt, Int32(i + 1), sqlite3_column_text(tagStmt, Int32(i)), -1, nil)
+                    }
+                    if sqlite3_step(insertStmt) == SQLITE_DONE { totalTags += 1 }
+                }
+            }
+        }
+
+        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+        UserDefaults.standard.set(Self.currentSeedVersion, forKey: Self.seedVersionKey)
+        print("[DB] Seeded \(totalAds) ads with \(totalTags) tags (version \(Self.currentSeedVersion))")
     }
 
     // MARK: - Ad Queries

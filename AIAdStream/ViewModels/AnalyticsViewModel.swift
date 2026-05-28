@@ -7,6 +7,12 @@ enum TimePeriod: String, CaseIterable {
     case today = "今日"
 }
 
+enum AnalyticsTab: String, CaseIterable {
+    case overview = "概览"
+    case content = "内容"
+    case events = "事件"
+}
+
 @MainActor
 final class AnalyticsViewModel: ObservableObject {
     @Published var events: [AnalyticsEvent] = []
@@ -22,9 +28,11 @@ final class AnalyticsViewModel: ObservableObject {
     @Published var ctr = 0.0
     @Published var channelBreakdown: [ChannelStats] = []
     @Published var topAds: [TopAdInfo] = []
+    @Published var allAdsStats: [TopAdInfo] = []
     @Published var eventTypeBreakdown: [(type: AnalyticsEventType, count: Int)] = []
     @Published var selectedPeriod: TimePeriod = .all
     @Published var totalInteractions = 0
+    @Published var selectedTab: AnalyticsTab = .overview
 
     private let service = AnalyticsService.shared
 
@@ -44,6 +52,7 @@ final class AnalyticsViewModel: ObservableObject {
         totalInteractions = likes + collects + shares
         channelBreakdown = service.channelBreakdown()
         topAds = service.topInteractedAds()
+        allAdsStats = service.allAdsStats()
         eventTypeBreakdown = service.eventTypeBreakdown()
         enrichedEvents = service.enrichedEvents()
         stateChanges = service.stateChangeLog()

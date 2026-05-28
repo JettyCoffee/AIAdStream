@@ -55,7 +55,8 @@ struct ChannelStats {
     let ctr: Double
 }
 
-struct TopAdInfo {
+struct TopAdInfo: Identifiable {
+    var id: String { adId }
     let adId: String
     let adTitle: String
     let adSponsor: String
@@ -175,6 +176,11 @@ final class AnalyticsService {
     }
 
     func topInteractedAds(limit: Int = 5) -> [TopAdInfo] {
+        Array(allAdsStats().prefix(limit))
+    }
+
+    /// 返回所有广告的统计数据，按总事件数降序排列
+    func allAdsStats() -> [TopAdInfo] {
         let events = allEvents()
         let adEvents = events.filter { $0.adId != nil }
         let grouped = Dictionary(grouping: adEvents) { $0.adId! }
@@ -184,8 +190,6 @@ final class AnalyticsService {
             return TopAdInfo(adId: adId, adTitle: context.title, adSponsor: context.sponsor, count: evts.count, breakdown: breakdown)
         }
         .sorted { $0.count > $1.count }
-        .prefix(limit)
-        .map { $0 }
     }
 
     func enrichedEvents(limit: Int = 50) -> [EnrichedEvent] {
