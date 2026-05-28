@@ -2,13 +2,10 @@ import Foundation
 
 /// Qwen 端侧模型服务，将自然语言查询转为结构化标签用于检索
 ///
-/// 集成方式：
-/// 1. Xcode → File → Add Package Dependencies → https://github.com/ml-explore/mlx-swift
-/// 2. 选择 mlx-swift 和 mlx-swift-lm 两个 package
-/// 3. 下载 Qwen3-0.6B 4-bit 量化模型至 App 的 Documents 目录
-/// 4. 取消下方 `// import MLXLM` 及相关代码的注释
-///
-/// 在此之前，fallback 使用数据库标签词汇模糊匹配完成检索。
+/// 当前使用数据库标签词汇模糊匹配作为 fallback。
+/// 启用端侧模型：Xcode → File → Add Package Dependencies →
+/// 添加 https://github.com/ml-explore/mlx-swift (MLX + MLXLM)，
+/// 然后取消下方 #if 块中的注释即可启用 LLM 推理。
 final class QwenService {
     static let shared = QwenService()
 
@@ -16,106 +13,132 @@ final class QwenService {
 
     private init() {}
 
-    // MARK: - Public API
-
-    /// 从自然语言查询中提取标签列表
-    func extractTags(from query: String) async -> [String] {
-        // 当 MLX 模型就绪时使用 LLM 推理
-        // if let tags = await llmExtractTags(query) { return tags }
-
-        // Fallback：从数据库现有标签词汇中模糊匹配
-        return fuzzyMatchTags(query)
-    }
-
-    /// 检查模型是否已加载
     var isModelReady: Bool {
-        false // 模型就绪后改为 true
+#if canImport(MLX)
+        return modelContainer != nil
+#else
+        return false
+#endif
     }
 
-    // MARK: - LLM 推理（需 MLX Swift 依赖）
-
-    /*
-    import MLXLM
-
-    private var modelContainer: ModelContainer?
-    private let modelURL: URL = {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return docs.appendingPathComponent("Qwen3-0.6B-4bit")
-    }()
-
-    private let extractionPrompt = """
-    你是一个广告标签提取器。给定用户的自然语言搜索查询，提取出用于检索广告的标签。
-    只输出逗号分隔的中文标签，不要有任何其他文字。
-
-    示例输入：适合学生党的性价比高的蓝牙耳机
-    示例输出：数码,学生党,通勤
-
-    示例输入：适合上班族的专业办公笔记本
-    示例输出：科技,上班族,居家,数码
-    """
+    // MARK: - Public
 
     func loadModel() async {
-        guard !isModelReady else { return }
+#if canImport(MLX)
+        guard !isModelReady, !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: modelURL.appendingPathComponent("config.json").path) {
+            print("[Qwen] 模型未下载，开始从 HuggingFace 拉取...")
+            await downloadModel()
+        }
+
         do {
             let config = ModelConfiguration(directory: modelURL)
             modelContainer = try await LLM.loadModelContainer(configuration: config)
+            print("[Qwen] 模型加载完成")
         } catch {
-            print("[Qwen] Model load failed: \(error)")
+            print("[Qwen] 模型加载失败: \(error)")
         }
+#endif
     }
+
+    func extractTags(from query: String) async -> [String] {
+#if canImport(MLX)
+        if let tags = await llmExtractTags(query) { return tags }
+#endif
+        return fuzzyMatchTags(query)
+    }
+
+    // MARK: - MLX 推理（需 mlx-swift + mlx-swift-lm SPM 依赖）
+
+#if canImport(MLX)
+    private var modelContainer: ModelContainer?
+    private var isLoading = false
+
+    private var modelURL: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return docs.appendingPathComponent("Qwen3-0.6B-4bit")
+    }
+
+    private let extractionPrompt = """
+    你是一个广告标签提取器。给定用户的自然语言搜索查询，提取用于检索广告的中文标签。
+    只输出逗号分隔的标签，不要有任何其他文字。每个标签不超过4个汉字。
+
+    示例输入：适合学生党的性价比高的蓝牙耳机
+    示例输出：数码,学生党,通勤,音乐
+
+    示例输入：适合上班族的专业办公笔记本电脑
+    示例输出：科技,上班族,居家,办公
+    """
 
     private func llmExtractTags(_ query: String) async -> [String]? {
         guard let container = modelContainer else { return nil }
         do {
-            let fullPrompt = "\(extractionPrompt)\n\n输入：\(query)\n输出："
+            let fullPrompt = "\(extractionPrompt)\n输入：\(query)\n输出："
             let result = try await LLM.generate(
                 modelContainer: container,
                 prompt: .init(role: .user, content: fullPrompt),
                 parameters: .init(maxTokens: 50, temperature: 0.1)
             )
             let raw = result.outputs.joined()
-            return raw
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
+            let tags = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && $0.count <= 8 }
+            guard !tags.isEmpty else { return nil }
+            print("[Qwen] 提取标签: \(tags)")
+            return tags
         } catch {
-            print("[Qwen] Inference error: \(error)")
+            print("[Qwen] 推理错误: \(error)")
             return nil
         }
     }
-    */
 
-    // MARK: - Fallback: 数据库标签词汇模糊匹配
+    private func downloadModel() async {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: modelURL, withIntermediateDirectories: true)
+        let files = ["config.json", "tokenizer.json", "tokenizer_config.json", "model.safetensors"]
+        let base = "https://huggingface.co/mlx-community/Qwen3-0.6B-4bit/resolve/main"
+        for file in files {
+            let dest = modelURL.appendingPathComponent(file)
+            guard !fm.fileExists(atPath: dest.path),
+                  let url = URL(string: "\(base)/\(file)") else { continue }
+            print("[Qwen] 下载中: \(file)...")
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                try data.write(to: dest)
+                print("[Qwen] \(file) OK (\(data.count / 1024)KB)")
+            } catch {
+                print("[Qwen] \(file) 失败: \(error.localizedDescription)")
+            }
+        }
+    }
+#endif
+
+    // MARK: - Fallback: 标签词汇模糊匹配
 
     private func fuzzyMatchTags(_ query: String) -> [String] {
         let allTags = db.allTags(for: nil)
         guard !allTags.isEmpty else { return [] }
 
         let keywords = extractKeywords(query)
-
-        // 综合评分：精确匹配 > 包含匹配 > 编辑距离
-        let scored = allTags.map { tag -> (tag: String, score: Int) in
-            let tagLower = tag.lowercased()
-            var score = 0
+        let scored = allTags.map { tag -> (String, Int) in
+            var s = 0
+            let tl = tag.lowercased()
             for kw in keywords {
-                let kwLower = kw.lowercased()
-                if tagLower == kwLower {
-                    score += 10
-                } else if tagLower.contains(kwLower) || kwLower.contains(tagLower) {
-                    score += 5
-                } else if levenshteinRatio(tagLower, kwLower) > 0.5 {
-                    score += 2
-                }
+                let kl = kw.lowercased()
+                if tl == kl { s += 10 }
+                else if tl.contains(kl) || kl.contains(tl) { s += 5 }
+                else if levenshteinRatio(tl, kl) > 0.5 { s += 2 }
             }
-            return (tag, score)
+            return (tag, s)
         }
 
-        return scored
-            .filter { $0.score > 0 }
-            .sorted { $0.score > $1.score }
-            .prefix(5)
-            .map { $0.tag }
+        let result = scored.filter { $0.1 > 0 }.sorted { $0.1 > $1.1 }.prefix(5).map { $0.0 }
+        print("[Qwen] fallback: \(result) ← \"\(query)\"")
+        return result
     }
 
     private func extractKeywords(_ query: String) -> [String] {
@@ -127,34 +150,20 @@ final class QwenService {
         let cleaned = query
             .replacingOccurrences(of: "[，。！？、；：\u{201c}\u{201d}\u{2018}\u{2019}【】（）《》\\s]+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
-
-        return cleaned
-            .split(separator: " ")
-            .map { String($0) }
-            .filter { !stopwords.contains($0) && $0.count >= 1 }
+        return cleaned.split(separator: " ").map(String.init).filter { !stopwords.contains($0) && $0.count >= 1 }
     }
 
     private func levenshteinRatio(_ s1: String, _ s2: String) -> Double {
-        let a = Array(s1), b = Array(s2)
-        let n = a.count, m = b.count
+        let a = Array(s1), b = Array(s2), n = a.count, m = b.count
         guard max(n, m) > 0 else { return 1.0 }
-
         var dp = [[Int]](repeating: [Int](repeating: 0, count: m + 1), count: n + 1)
         for i in 0...n { dp[i][0] = i }
         for j in 0...m { dp[0][j] = j }
-
         for i in 1...n {
             for j in 1...m {
-                if a[i-1] == b[j-1] {
-                    dp[i][j] = dp[i-1][j-1]
-                } else {
-                    dp[i][j] = min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]) + 1
-                }
+                dp[i][j] = a[i-1] == b[j-1] ? dp[i-1][j-1] : min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]) + 1
             }
         }
-
-        let dist = Double(dp[n][m])
-        let maxLen = Double(max(n, m))
-        return 1.0 - dist / maxLen
+        return 1.0 - Double(dp[n][m]) / Double(max(n, m))
     }
 }

@@ -82,26 +82,44 @@ struct VideoCard: View {
                 }
             )
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(ad.sponsor)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Constants.Colors.secondaryText)
+
                 Text(ad.title)
                     .font(.system(size: 16, weight: .semibold))
-                    .padding(.horizontal, Constants.horizontalPadding)
 
                 if let summary = ad.aiSummary {
-                    Text(summary)
-                        .font(.system(size: 13))
-                        .foregroundColor(Constants.Colors.secondaryText)
-                        .lineLimit(2)
-                        .padding(.horizontal, Constants.horizontalPadding)
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11))
+                            .foregroundColor(.purple.opacity(0.6))
+                            .padding(.top, 1)
+                        Text(summary)
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary.opacity(0.7))
+                            .lineSpacing(3)
+                            .lineLimit(2)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.purple.opacity(0.04))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
                 if !ad.tags.isEmpty {
-                    TagRow(
-                        tags: ad.tags,
-                        highlightedTagName: activeTagFilter,
-                        highlightColor: ad.channel.accentColor,
-                        onTagTap: onTagTap
-                    )
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(ad.tags) { tag in
+                                TagChipView(
+                                    tag: tag,
+                                    isHighlighted: tag.name == activeTagFilter,
+                                    highlightColor: ad.channel.accentColor
+                                ) { onTagTap(tag) }
+                            }
+                        }
+                    }
                 }
 
                 InteractionBar(
@@ -111,17 +129,15 @@ struct VideoCard: View {
                     onCollect: onCollect,
                     onShare: onShare
                 )
-                .padding(.horizontal, Constants.horizontalPadding)
-                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(16)
             .background(.white)
         }
         .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-        .padding(.horizontal, Constants.horizontalPadding)
+        .padding(.horizontal, 16)
         .onChange(of: isActive) { _, active in
             if active {
                 setupPlayer()
