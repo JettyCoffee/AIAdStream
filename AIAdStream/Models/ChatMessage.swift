@@ -130,3 +130,76 @@ struct ToolResult {
     let ads: [AdItem]
     let detailAd: AdItem?
 }
+
+// MARK: - Conversation Item (ordered list for chat UI)
+
+enum ConversationItem: Identifiable {
+    case message(ChatMessage)
+    case adCards([AdItem])
+
+    var id: String {
+        switch self {
+        case .message(let msg): return msg.id
+        case .adCards(let ads): return "ads_" + ads.map(\.id).joined(separator: "_")
+        }
+    }
+
+    var message: ChatMessage? {
+        if case .message(let msg) = self { return msg }
+        return nil
+    }
+
+    var ads: [AdItem]? {
+        if case .adCards(let list) = self { return list }
+        return nil
+    }
+}
+
+// MARK: - Conversation Record (persisted history)
+
+struct ConversationRecord: Identifiable, Codable {
+    var id: String
+    var title: String
+    var date: Date
+    var items: [PersistedItem]
+}
+
+enum PersistedItem: Codable {
+    case message(role: String, content: String)
+    case adCards(adIds: [String])
+
+    enum CodingKeys: String, CodingKey {
+        case type, role, content, adIds
+    }
+
+    enum ItemType: String, Codable {
+        case message, adCards
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(ItemType.self, forKey: .type)
+        switch type {
+        case .message:
+            let role = try container.decode(String.self, forKey: .role)
+            let content = try container.decode(String.self, forKey: .content)
+            self = .message(role: role, content: content)
+        case .adCards:
+            let adIds = try container.decode([String].self, forKey: .adIds)
+            self = .adCards(adIds: adIds)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .message(let role, let content):
+            try container.encode(ItemType.message, forKey: .type)
+            try container.encode(role, forKey: .role)
+            try container.encode(content, forKey: .content)
+        case .adCards(let adIds):
+            try container.encode(ItemType.adCards, forKey: .type)
+            try container.encode(adIds, forKey: .adIds)
+        }
+    }
+}

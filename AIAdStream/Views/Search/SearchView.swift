@@ -17,6 +17,15 @@ struct SearchView: View {
             .navigationTitle("AI 广告搜索")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        viewModel.showHistory = true
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                }
                 if viewModel.hasConversation {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("新对话") {
@@ -26,6 +35,11 @@ struct SearchView: View {
                         }
                         .font(.system(size: 14))
                     }
+                }
+            }
+            .sheet(isPresented: $viewModel.showHistory) {
+                ConversationHistoryView { record in
+                    viewModel.loadConversation(record)
                 }
             }
         }
@@ -108,18 +122,19 @@ struct SearchView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(viewModel.messages) { msg in
-                            chatBubble(msg)
+                        // 按顺序渲染所有对话项：消息气泡 / 广告卡片
+                        ForEach(viewModel.items) { item in
+                            switch item {
+                            case .message(let msg):
+                                chatBubble(msg)
+                            case .adCards(let ads):
+                                adCardsInline(ads)
+                            }
                         }
 
-                        // 流式输出中
-                        if viewModel.isStreaming && !viewModel.streamingContent.isEmpty {
+                        // 流式输出中：显示正在生成的文本
+                        if viewModel.isStreaming {
                             streamingBubble
-                        }
-
-                        // 广告卡片
-                        if !viewModel.recommendedAds.isEmpty {
-                            adCardsSection
                         }
 
                         // 错误提示
@@ -140,14 +155,16 @@ struct SearchView: View {
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
-                .onChange(of: viewModel.messages.count) { _, _ in
+                .onChange(of: viewModel.items.count) { _, _ in
                     withAnimation {
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
-                .onChange(of: viewModel.recommendedAds.count) { _, _ in
-                    withAnimation {
-                        proxy.scrollTo("bottom", anchor: .bottom)
+                .onChange(of: viewModel.isStreaming) { _, newValue in
+                    if !newValue {
+                        withAnimation {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -194,7 +211,9 @@ struct SearchView: View {
         }
     }
 
+    @ViewBuilder
     private var streamingBubble: some View {
+        let content = viewModel.streamingContent.isEmpty ? "..." : viewModel.streamingContent
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkles")
                 .font(.system(size: 12))
@@ -204,9 +223,9 @@ struct SearchView: View {
                 .clipShape(Circle())
                 .padding(.top, 2)
 
-            Text(viewModel.streamingContent)
+            Text(content)
                 .font(.system(size: 15))
-                .foregroundColor(.primary)
+                .foregroundColor(.primary.opacity(0.7))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(Color(red: 0.95, green: 0.95, blue: 0.96))
@@ -225,21 +244,11 @@ struct SearchView: View {
         }
     }
 
-    // MARK: - Ad Cards Section
+    // MARK: - Ad Cards (inline, between messages)
 
-    private var adCardsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 4) {
-                Image(systemName: "rectangle.grid.1x2")
-                    .font(.system(size: 11))
-                    .foregroundColor(Constants.Colors.secondaryText)
-                Text("为你推荐")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Constants.Colors.secondaryText)
-            }
-            .padding(.leading, 4)
-
-            ForEach(viewModel.recommendedAds) { ad in
+    private func adCardsInline(_ ads: [AdItem]) -> some View {
+        VStack(spacing: 8) {
+            ForEach(ads) { ad in
                 NavigationLink {
                     AdDetailView(ad: ad)
                         .environmentObject(feedViewModel)
@@ -249,7 +258,7 @@ struct SearchView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.leading, 32)
     }
 
     private func adCardRow(_ ad: AdItem) -> some View {
