@@ -25,6 +25,13 @@ struct ContentView: View {
                     Text("数据")
                 }
                 .tag(2)
+
+            SettingsView()
+                .tabItem {
+                    Image(systemName: selectedTab == 3 ? "gearshape.fill" : "gearshape")
+                    Text("设置")
+                }
+                .tag(3)
         }
         .tint(.blue)
     }

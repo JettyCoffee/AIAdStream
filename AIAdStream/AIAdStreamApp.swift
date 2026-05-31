@@ -8,9 +8,6 @@ struct AIAdStreamApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(feedViewModel)
-                .task {
-                    await QwenService.shared.loadModel()
-                }
         }
     }
 }

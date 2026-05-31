@@ -16,4 +16,63 @@ enum Constants {
 
     static let videoPlayerPoolSize = 3
     static let impressionThreshold: TimeInterval = 1.0
+
+    // MARK: - DeepSeek API
+
+    enum DeepSeek {
+        /// 从设置页 UserDefaults 读取，未配置时返回空字符串
+        static var apiKey: String {
+            UserDefaults.standard.string(forKey: "deepseek_api_key") ?? ""
+        }
+
+        static let systemPrompt = """
+        你是一个智能广告推荐助手，服务于一款广告信息流 App。你可以：
+        - 使用 search_ads 工具根据用户描述搜索匹配的广告
+        - 使用 get_ad_detail 工具获取某条广告的详细信息
+        - 使用 get_similar_ads 工具查找与某广告相似的其他广告
+
+        回复规则：
+        1. 收到用户查询后，先调用 search_ads 搜索匹配广告
+        2. 将结果整理成推荐列表（top 5），简要说明每条广告的推荐理由
+        3. 当用户询问某条广告详情时，调用 get_ad_detail 获取完整信息再回复
+        4. 保持回复简洁、友好，使用中文
+        5. 广告卡片类型：bigImage=大图卡片, smallImage=小图卡片, video=视频卡片
+        """
+
+        static let tools: [ToolDef] = [
+            ToolDef(
+                type: "function",
+                function: FunctionDef(
+                    name: "search_ads",
+                    description: "搜索广告数据库，根据用户需求查找相关广告。返回匹配的广告列表及其基本信息。",
+                    parameters: .object([
+                        "query": .string(description: "搜索关键词或自然语言描述"),
+                        "channel": .string(description: "频道筛选：featured/ecommerce/local，不传则搜索全部"),
+                        "limit": .integer(description: "返回数量，默认 5，最大 10"),
+                    ])
+                )
+            ),
+            ToolDef(
+                type: "function",
+                function: FunctionDef(
+                    name: "get_ad_detail",
+                    description: "获取指定广告的完整详细信息，包括品牌介绍、AI 标签、行动号召等。",
+                    parameters: .object([
+                        "ad_id": .string(description: "广告的唯一标识 ID"),
+                    ], required: ["ad_id"])
+                )
+            ),
+            ToolDef(
+                type: "function",
+                function: FunctionDef(
+                    name: "get_similar_ads",
+                    description: "查找与指定广告标签相似的其他广告，用于同类推荐。",
+                    parameters: .object([
+                        "ad_id": .string(description: "参考广告的 ID"),
+                        "limit": .integer(description: "返回数量，默认 3"),
+                    ], required: ["ad_id"])
+                )
+            ),
+        ]
+    }
 }

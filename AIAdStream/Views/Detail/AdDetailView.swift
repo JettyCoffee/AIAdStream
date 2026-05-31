@@ -9,6 +9,7 @@ struct AdDetailView: View {
     @State private var isPlaying = false
     @State private var isMuted = false
     @State private var player: AVPlayer?
+    @FocusState private var isChatFocused: Bool
 
     init(ad: AdItem) {
         self.ad = ad
@@ -16,54 +17,69 @@ struct AdDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                mediaSection
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    mediaSection
 
-                VStack(alignment: .leading, spacing: 20) {
-                    headerSection
-                    Divider()
-                    brandSection
-                    if let summary = viewModel.summary {
-                        aiSummarySection(summary)
+                    VStack(alignment: .leading, spacing: 20) {
+                        headerSection
+                        Divider()
+                        brandSection
+                        if !viewModel.tags.isEmpty {
+                            tagsSection
+                        }
+                        interactionSection
+                        ctaButton
+
+                        Divider()
+                            .padding(.vertical, 4)
+
+                        aiChatSection
                     }
-                    if !viewModel.tags.isEmpty {
-                        tagsSection
-                    }
-                    interactionSection
-                    ctaButton
-                }
-                .padding(Constants.horizontalPadding)
-                .padding(.top, 20)
-            }
-        }
-        .ignoresSafeArea(edges: .top)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    feedViewModel.incrementShare(for: ad.id)
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.primary)
-                        .padding(8)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
+                    .padding(Constants.horizontalPadding)
+                    .padding(.top, 20)
+
+                    Color.clear.frame(height: 1).id("chatBottom")
                 }
             }
-        }
-        .task {
-            await viewModel.loadAIData()
-            if ad.cardType == .video {
-                setupPlayer()
-                player?.play()
-                isPlaying = true
+            .ignoresSafeArea(edges: .top)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        feedViewModel.incrementShare(for: ad.id)
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                }
             }
-        }
-        .onDisappear {
-            cleanupPlayer()
+            .task {
+                if ad.cardType == .video {
+                    setupPlayer()
+                    player?.play()
+                    isPlaying = true
+                }
+            }
+            .onDisappear {
+                cleanupPlayer()
+            }
+            .onChange(of: viewModel.chatStreamingContent) { _, _ in
+                withAnimation {
+                    scrollProxy.scrollTo("chatBottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: viewModel.chatMessages.count) { _, _ in
+                withAnimation {
+                    scrollProxy.scrollTo("chatBottom", anchor: .bottom)
+                }
+            }
         }
     }
 
@@ -176,30 +192,6 @@ struct AdDetailView: View {
         }
     }
 
-    // MARK: - AI Summary
-
-    private func aiSummarySection(_ summary: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 13))
-                    .foregroundColor(.purple)
-                Text("AI 摘要")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.purple)
-            }
-
-            Text(summary)
-                .font(.system(size: 14))
-                .foregroundColor(.primary.opacity(0.75))
-                .lineSpacing(4)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.purple.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-    }
-
     // MARK: - Tags
 
     private var tagsSection: some View {
@@ -276,7 +268,152 @@ struct AdDetailView: View {
             .background(feedViewModel.currentChannel.accentColor)
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - AI Chat Section
+
+    private var aiChatSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13))
+                    .foregroundColor(.purple)
+                Text("AI 助手")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.purple)
+                Text("了解这款广告的更多信息")
+                    .font(.system(size: 11))
+                    .foregroundColor(Constants.Colors.secondaryText)
+            }
+
+            // Chat messages
+            ForEach(viewModel.chatMessages) { msg in
+                detailChatBubble(msg)
+            }
+
+            // Streaming
+            if viewModel.isChatStreaming && !viewModel.chatStreamingContent.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10))
+                        .foregroundColor(.purple)
+                        .padding(.top, 4)
+
+                    Text(viewModel.chatStreamingContent)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary.opacity(0.8))
+                        .padding(10)
+                        .background(Color.purple.opacity(0.04))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+
+            // Recommended ads from chat
+            if !viewModel.chatRecommendedAds.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(viewModel.chatRecommendedAds) { similarAd in
+                        NavigationLink {
+                            AdDetailView(ad: similarAd)
+                                .environmentObject(feedViewModel)
+                        } label: {
+                            HStack(spacing: 10) {
+                                LazyImageView(imageName: similarAd.imageURL, contentMode: .fill)
+                                    .frame(width: 44, height: 44)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .background(Color.gray.opacity(0.05))
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(similarAd.title)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    Text(similarAd.sponsor)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Constants.Colors.secondaryText)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(Constants.Colors.secondaryText)
+                            }
+                            .padding(8)
+                            .background(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .shadow(color: .black.opacity(0.03), radius: 3, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Error
+            if let error = viewModel.chatErrorMessage {
+                Text(error)
+                    .font(.system(size: 12))
+                    .foregroundColor(.orange)
+                    .padding(8)
+                    .background(Color.orange.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            // Input
+            HStack(spacing: 8) {
+                TextField("询问关于此广告的问题...", text: $viewModel.chatInput, axis: .vertical)
+                    .font(.system(size: 14))
+                    .focused($isChatFocused)
+                    .submitLabel(.send)
+                    .onSubmit { viewModel.sendChatMessage() }
+                    .lineLimit(1...3)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(red: 0.95, green: 0.95, blue: 0.96))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                Button {
+                    viewModel.sendChatMessage()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(
+                            viewModel.chatInput.trimmingCharacters(in: .whitespaces).isEmpty
+                                ? Color.gray.opacity(0.3)
+                                : Color.purple
+                        )
+                }
+                .disabled(viewModel.chatInput.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
         .padding(.bottom, 32)
+    }
+
+    private func detailChatBubble(_ msg: ChatMessage) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            if msg.role == .assistant {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10))
+                    .foregroundColor(.purple)
+                    .padding(.top, 4)
+            } else {
+                Spacer(minLength: 30)
+            }
+
+            Text(msg.content)
+                .font(.system(size: 14))
+                .foregroundColor(msg.role == .user ? .white : .primary.opacity(0.8))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    msg.role == .user
+                        ? Color.purple.opacity(0.8)
+                        : Color.purple.opacity(0.04)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if msg.role == .user {
+                Spacer(minLength: 30)
+            }
+        }
     }
 
     // MARK: - Helpers

@@ -15,11 +15,9 @@ final class FeedViewModel: ObservableObject {
     @Published var isFiltering = false
 
     private let dataService = AdDataService()
-    private let aiService = AIService()
     private let analytics = AnalyticsService.shared
     private let db = DatabaseManager.shared
     private var currentPage = 0
-    private var aiTask: Task<Void, Never>?
 
     var allAdsForCurrentChannel: [AdItem] {
         dataService.allAds(for: currentChannel)
@@ -39,7 +37,6 @@ final class FeedViewModel: ObservableObject {
         ads = []
         await loadPage(1)
         isLoading = false
-        await generateTagsForVisibleAds()
     }
 
     func refresh() async {
@@ -144,26 +141,6 @@ final class FeedViewModel: ObservableObject {
     private func findAd(by id: String) -> AdItem? {
         if let ad = ads.first(where: { $0.id == id }) { return ad }
         return dataService.fetchAd(by: id)
-    }
-
-    private func generateTagsForVisibleAds() async {
-        aiTask?.cancel()
-        aiTask = Task {
-            for ad in ads.prefix(5) {
-                guard !Task.isCancelled else { return }
-                let hasTags = !db.tagsForAd(ad.id).isEmpty
-                let hasSummary = db.fetchAd(by: ad.id)?.aiSummary != nil
-                var newTags: [AITag]?
-                var newSummary: String?
-
-                if !hasTags { newTags = await aiService.generateTags(for: ad) }
-                if !hasSummary { newSummary = await aiService.generateSummary(for: ad) }
-
-                guard !Task.isCancelled, let index = ads.firstIndex(where: { $0.id == ad.id }) else { return }
-                if let tags = newTags { ads[index].tags = tags }
-                if let summary = newSummary { ads[index].aiSummary = summary }
-            }
-        }
     }
 
     func ad(by id: String) -> AdItem? {
