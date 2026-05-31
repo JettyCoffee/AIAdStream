@@ -189,10 +189,9 @@ final class AIService {
             "description": ad.description,
             "cardType": ad.cardType.rawValue,
             "channel": ad.channel.rawValue,
-            "ctaText": ad.ctaText,
             "tags": tags,
+            "aiSummary": ad.aiSummary,
         ]
-        if let summary = ad.aiSummary { detail["aiSummary"] = summary }
 
         let text = (try? JSONSerialization.data(
             withJSONObject: detail, options: .prettyPrinted

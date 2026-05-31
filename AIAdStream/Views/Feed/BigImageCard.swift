@@ -32,23 +32,21 @@ struct BigImageCard: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                if let summary = ad.aiSummary {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10))
-                            .foregroundColor(.purple.opacity(0.5))
-                            .padding(.top, 1)
-                        Text(summary)
-                            .font(.system(size: 12))
-                            .foregroundColor(.primary.opacity(0.65))
-                            .lineSpacing(3)
-                            .lineLimit(2)
-                    }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.purple.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10))
+                        .foregroundColor(.purple.opacity(0.5))
+                        .padding(.top, 1)
+                    Text(ad.aiSummary)
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary.opacity(0.65))
+                        .lineSpacing(3)
+                        .lineLimit(2)
                 }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.purple.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 if !ad.tags.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {

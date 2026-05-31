@@ -30,7 +30,6 @@ struct AdDetailView: View {
                             tagsSection
                         }
                         interactionSection
-                        ctaButton
 
                         Divider()
                             .padding(.vertical, 4)
@@ -248,27 +247,6 @@ struct AdDetailView: View {
             onShare: { feedViewModel.incrementShare(for: ad.id) }
         )
         .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    // MARK: - CTA
-
-    private var ctaButton: some View {
-        Button {
-            feedViewModel.trackClick(adId: ad.id)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.up.forward.app")
-                    .font(.system(size: 15))
-                Text(ad.ctaText)
-                    .font(.system(size: 16, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(feedViewModel.currentChannel.accentColor)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .padding(.bottom, 8)
     }
 
     // MARK: - AI Chat Section

@@ -24,12 +24,10 @@ struct SmallImageCard: View {
                     .font(.system(size: 14, weight: .semibold))
                     .lineLimit(2)
 
-                if let summary = ad.aiSummary {
-                    Text(summary)
-                        .font(.system(size: 11))
-                        .foregroundColor(.primary.opacity(0.55))
-                        .lineLimit(2)
-                }
+                Text(ad.aiSummary)
+                    .font(.system(size: 11))
+                    .foregroundColor(.primary.opacity(0.55))
+                    .lineLimit(2)
 
                 if !ad.tags.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {

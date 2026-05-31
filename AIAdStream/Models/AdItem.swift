@@ -9,9 +9,8 @@ struct AdItem: Identifiable, Codable, Hashable {
     let cardType: AdCardType
     let channel: Channel
     var tags: [AITag]
-    var aiSummary: String?
+    let aiSummary: String
     let sponsor: String
-    let ctaText: String
 
     static func == (lhs: AdItem, rhs: AdItem) -> Bool {
         lhs.id == rhs.id

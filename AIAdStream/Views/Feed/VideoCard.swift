@@ -90,23 +90,21 @@ struct VideoCard: View {
                 Text(ad.title)
                     .font(.system(size: 16, weight: .semibold))
 
-                if let summary = ad.aiSummary {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 11))
-                            .foregroundColor(.purple.opacity(0.6))
-                            .padding(.top, 1)
-                        Text(summary)
-                            .font(.system(size: 13))
-                            .foregroundColor(.primary.opacity(0.7))
-                            .lineSpacing(3)
-                            .lineLimit(2)
-                    }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.purple.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                        .foregroundColor(.purple.opacity(0.6))
+                        .padding(.top, 1)
+                    Text(ad.aiSummary)
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary.opacity(0.7))
+                        .lineSpacing(3)
+                        .lineLimit(2)
                 }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.purple.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 if !ad.tags.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {

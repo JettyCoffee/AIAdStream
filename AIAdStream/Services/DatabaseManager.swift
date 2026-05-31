@@ -45,16 +45,7 @@ final class DatabaseManager {
             card_type TEXT NOT NULL,
             channel TEXT NOT NULL,
             sponsor TEXT NOT NULL,
-            cta_text TEXT NOT NULL,
-            ai_summary TEXT,
-            creative_format TEXT,
-            creative_emotion TEXT,
-            industry TEXT,
-            platform TEXT,
-            ctr REAL,
-            conversion_rate REAL,
-            budget REAL,
-            target_audience TEXT
+            ai_summary TEXT NOT NULL
         );
         """
 
@@ -102,7 +93,7 @@ final class DatabaseManager {
 
     private static let seedVersionKey = "com.aiadstream.seed_version"
     /// 当前种子数据版本号，升级种子库时递增
-    private static let currentSeedVersion = 2
+    private static let currentSeedVersion = 3
 
     private func seedIfNeeded() {
         let storedVersion = UserDefaults.standard.integer(forKey: Self.seedVersionKey)
@@ -148,13 +139,13 @@ final class DatabaseManager {
         // 导入广告数据
         var queryStmt: OpaquePointer?
         if sqlite3_prepare_v2(seedDB,
-            "SELECT id, title, description, image_url, video_url, card_type, channel, sponsor, cta_text FROM ad_items",
+            "SELECT id, title, description, image_url, video_url, card_type, channel, sponsor, ai_summary FROM ad_items",
             -1, &queryStmt, nil) == SQLITE_OK {
             defer { sqlite3_finalize(queryStmt) }
 
             while sqlite3_step(queryStmt) == SQLITE_ROW {
                 var insertStmt: OpaquePointer?
-                let sql = "INSERT INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, cta_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                let sql = "INSERT INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, ai_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 if sqlite3_prepare_v2(db, sql, -1, &insertStmt, nil) == SQLITE_OK {
                     defer { sqlite3_finalize(insertStmt) }
                     for i in 0..<9 {
@@ -272,9 +263,9 @@ final class DatabaseManager {
             SELECT DISTINCT a.* FROM ad_items a
             LEFT JOIN ad_tags t ON a.id = t.ad_id
             WHERE (a.title LIKE ? OR a.description LIKE ? OR a.sponsor LIKE ?
-               OR a.industry LIKE ? OR t.name LIKE ?)
+               OR t.name LIKE ?)
             """
-            var params: [String] = [searchPattern, searchPattern, searchPattern, searchPattern, searchPattern]
+            var params: [String] = [searchPattern, searchPattern, searchPattern, searchPattern]
 
             if let ch = channel {
                 sql += " AND a.channel = ?"
@@ -509,8 +500,8 @@ final class DatabaseManager {
 
     private func insertAd(_ ad: AdItem) {
         executeUpdate("""
-        INSERT OR REPLACE INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, cta_text, ai_summary, creative_format, creative_emotion, industry, platform, ctr, conversion_rate, budget, target_audience)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, ai_summary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """) { stmt in
             sqlite3_bind_text(stmt, 1, (ad.id as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 2, (ad.title as NSString).utf8String, -1, nil)
@@ -522,18 +513,7 @@ final class DatabaseManager {
             sqlite3_bind_text(stmt, 6, (ad.cardType.rawValue as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 7, (ad.channel.rawValue as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 8, (ad.sponsor as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 9, (ad.ctaText as NSString).utf8String, -1, nil)
-            if let summary = ad.aiSummary {
-                sqlite3_bind_text(stmt, 10, (summary as NSString).utf8String, -1, nil)
-            } else { sqlite3_bind_null(stmt, 10) }
-            sqlite3_bind_null(stmt, 11) // creative_format
-            sqlite3_bind_null(stmt, 12) // creative_emotion
-            sqlite3_bind_null(stmt, 13) // industry
-            sqlite3_bind_null(stmt, 14) // platform
-            sqlite3_bind_null(stmt, 15) // ctr
-            sqlite3_bind_null(stmt, 16) // conversion_rate
-            sqlite3_bind_null(stmt, 17) // budget
-            sqlite3_bind_null(stmt, 18) // target_audience
+            sqlite3_bind_text(stmt, 9, (ad.aiSummary as NSString).utf8String, -1, nil)
         }
 
         for tag in ad.tags {
@@ -559,9 +539,8 @@ final class DatabaseManager {
             cardType: AdCardType(rawValue: row["card_type"] as? String ?? "bigImage") ?? .bigImage,
             channel: Channel(rawValue: row["channel"] as? String ?? "featured") ?? .featured,
             tags: tagsForAdInternal(adId),
-            aiSummary: row["ai_summary"] as? String,
-            sponsor: row["sponsor"] as? String ?? "",
-            ctaText: row["cta_text"] as? String ?? "了解详情"
+            aiSummary: row["ai_summary"] as? String ?? "",
+            sponsor: row["sponsor"] as? String ?? ""
         )
     }
 
