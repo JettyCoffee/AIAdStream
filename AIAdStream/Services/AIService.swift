@@ -78,6 +78,19 @@ final class AIService {
                     }
 
                     guard !toolCallDeltas.isEmpty else {
+                        // LLM 未调用任何工具：回退为自动搜索数据库
+                        if let lastUserMsg = history.last(where: { $0.role == .user }) {
+                            let query = lastUserMsg.content
+                            let (resultText, resultAds, _) = await executeTool(
+                                name: "search_ads",
+                                arguments: "{\"query\":\"\(query.replacingOccurrences(of: "\"", with: "\\\""))\"}"
+                            )
+                            continuation.yield(.toolCallResult(ToolResult(
+                                toolName: "search_ads",
+                                ads: resultAds,
+                                detailAd: nil
+                            )))
+                        }
                         continuation.yield(.done(fullContent))
                         continuation.finish()
                         return
@@ -143,6 +156,9 @@ final class AIService {
         case "get_similar_ads":
             let (text, ads) = executeGetSimilarAds(json)
             return (text, ads, nil)
+        case "web_search":
+            let text = await executeWebSearch(json)
+            return (text, [], nil)
         default:
             return ("未知工具: \(name)", [], nil)
         }
@@ -231,5 +247,92 @@ final class AIService {
             withJSONObject: adsJson, options: .prettyPrinted
         )).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         return (text, Array(similar))
+    }
+
+    /// 联网搜索：使用 DuckDuckGo Lite 抓取搜索结果摘要
+    private func executeWebSearch(_ args: [String: Any]) async -> String {
+        guard let query = args["query"] as? String, !query.trimmingCharacters(in: .whitespaces).isEmpty
+        else { return "搜索查询为空。" }
+
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        guard let url = URL(string: "https://lite.duckduckgo.com/lite/?q=\(encoded)") else {
+            return "搜索 URL 构造失败。"
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let html = String(data: data, encoding: .utf8) else {
+                return "无法解析搜索结果。"
+            }
+
+            // 简易 HTML 解析：提取 <a> 标签内的标题和摘要
+            var results: [(title: String, snippet: String)] = []
+            let lines = html.components(separatedBy: "\n")
+            for line in lines {
+                // DuckDuckGo Lite 结果格式：<a href="...">标题</a><span>摘要</span>
+                if let titleStart = line.range(of: "class=\"result-link\""),
+                   let snippetStart = line.range(of: "class=\"result-snippet\"") {
+                    let titlePart = String(line[titleStart.upperBound...])
+                        .components(separatedBy: "<")
+                        .first?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let snippetPart = String(line[snippetStart.upperBound...])
+                        .components(separatedBy: "<")
+                        .first?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let cleanTitle = titlePart.replacingOccurrences(of: ">", with: "")
+                        .trimmingCharacters(in: .whitespaces)
+                    if !cleanTitle.isEmpty {
+                        results.append((title: cleanTitle, snippet: snippetPart))
+                    }
+                }
+            }
+
+            // 也尝试更通用的解析：提取所有链接文本
+            if results.isEmpty {
+                var seenTitles: Set<String> = []
+                let linkPattern = try? NSRegularExpression(pattern: "<a[^>]*class=\"result-link\"[^>]*>([^<]*)</a>", options: .caseInsensitive)
+                let snippetPattern = try? NSRegularExpression(pattern: "class=\"result-snippet\"[^>]*>([^<]*)", options: .caseInsensitive)
+                if let linkPattern = linkPattern {
+                    let linkRange = NSRange(html.startIndex..., in: html)
+                    let linkMatches = linkPattern.matches(in: html, range: linkRange)
+                    for match in linkMatches.prefix(10) {
+                        if let titleRange = Range(match.range(at: 1), in: html) {
+                            let title = String(html[titleRange])
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !seenTitles.contains(title) {
+                                seenTitles.insert(title)
+                                results.append((title: title, snippet: ""))
+                            }
+                        }
+                    }
+                    if let snippetPattern = snippetPattern {
+                        let snippetMatches = snippetPattern.matches(in: html, range: linkRange)
+                        for (i, match) in snippetMatches.enumerated() {
+                            if i < results.count, let sRange = Range(match.range(at: 1), in: html) {
+                                results[i].snippet = String(html[sRange])
+                                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                            }
+                        }
+                    }
+                }
+            }
+
+            guard !results.isEmpty else {
+                return "未找到与「\(query)」相关的搜索结果。"
+            }
+
+            let summary = results.prefix(5).enumerated().map { i, r in
+                "\(i + 1). \(r.title)\(r.snippet.isEmpty ? "" : " — \(r.snippet)")"
+            }.joined(separator: "\n")
+
+            return "联网搜索结果（\(query)）：\n\(summary)"
+        } catch {
+            return "联网搜索失败：\(error.localizedDescription)"
+        }
     }
 }

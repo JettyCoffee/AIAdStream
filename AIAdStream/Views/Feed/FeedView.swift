@@ -12,6 +12,7 @@ struct FeedView: View {
                 ChannelTabBar(selectedChannel: $viewModel.currentChannel)
                     .onChange(of: viewModel.currentChannel) { _, newChannel in
                         savedScrollAdId = nil
+                        needsScrollRestore = false
                         Task { await viewModel.switchChannel(to: newChannel) }
                     }
 
@@ -30,6 +31,11 @@ struct FeedView: View {
             .background(Color(red: 0.97, green: 0.97, blue: 0.97))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Image(systemName: "megaphone.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.blue.opacity(0.8))
+                }
                 ToolbarItem(placement: .principal) {
                     Text("AIAdStream")
                         .font(.system(size: 17, weight: .semibold))
@@ -99,7 +105,6 @@ struct FeedView: View {
                                 isActive: activeVideoId == ad.id,
                                 activeTagFilter: viewModel.activeTagFilter
                             )
-                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .id(ad.id)
@@ -124,10 +129,11 @@ struct FeedView: View {
             }
             .refreshable { await viewModel.refresh() }
             .onAppear {
-                guard needsScrollRestore, let target = savedScrollAdId else { return }
+                // 从详情页返回时恢复滚动位置，筛选期间跳过
+                guard needsScrollRestore, !viewModel.isFiltering, let target = savedScrollAdId else { return }
                 needsScrollRestore = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    proxy.scrollTo(target, anchor: .top)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    proxy.scrollTo(target)
                 }
             }
         }

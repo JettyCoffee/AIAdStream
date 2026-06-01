@@ -10,6 +10,7 @@ struct AdDetailView: View {
     @State private var isMuted = false
     @State private var player: AVPlayer?
     @FocusState private var isChatFocused: Bool
+    @State private var showAISheet = false
 
     init(ad: AdItem) {
         self.ad = ad
@@ -17,68 +18,56 @@ struct AdDetailView: View {
     }
 
     var body: some View {
-        ScrollViewReader { scrollProxy in
+        VStack(spacing: 0) {
+            // 可滚动内容区
             ScrollView {
                 VStack(spacing: 0) {
                     mediaSection
 
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 16) {
                         headerSection
-                        Divider()
                         brandSection
-                        if !viewModel.tags.isEmpty {
-                            tagsSection
-                        }
-                        interactionSection
-
-                        Divider()
-                            .padding(.vertical, 4)
-
-                        aiChatSection
                     }
                     .padding(Constants.horizontalPadding)
-                    .padding(.top, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 100) // 为底部固定栏留空间
+                }
+            }
 
-                    Color.clear.frame(height: 1).id("chatBottom")
+            // 底部固定栏：互动按钮 + AI 输入
+            bottomBar
+        }
+        .ignoresSafeArea(edges: .top)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    feedViewModel.incrementShare(for: ad.id)
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                        .padding(8)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
                 }
             }
-            .ignoresSafeArea(edges: .top)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        feedViewModel.incrementShare(for: ad.id)
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                            .padding(8)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                }
+        }
+        .sheet(isPresented: $showAISheet) {
+            aiChatSheet
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .task {
+            if ad.cardType == .video {
+                setupPlayer()
+                player?.play()
+                isPlaying = true
             }
-            .task {
-                if ad.cardType == .video {
-                    setupPlayer()
-                    player?.play()
-                    isPlaying = true
-                }
-            }
-            .onDisappear {
-                cleanupPlayer()
-            }
-            .onChange(of: viewModel.chatStreamingContent) { _, _ in
-                withAnimation {
-                    scrollProxy.scrollTo("chatBottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: viewModel.chatMessages.count) { _, _ in
-                withAnimation {
-                    scrollProxy.scrollTo("chatBottom", anchor: .bottom)
-                }
-            }
+        }
+        .onDisappear {
+            cleanupPlayer()
         }
     }
 
@@ -140,11 +129,18 @@ struct AdDetailView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                aidCapsule(ad.id)
-                cardTypeBadge(ad.cardType)
+        VStack(alignment: .leading, spacing: 10) {
+            // 赞助商 + 频道
+            HStack(spacing: 6) {
+                Text(ad.sponsor)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Constants.Colors.secondaryText)
+                Text("· 广告")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray.opacity(0.6))
+
                 Spacer()
+
                 Text(channelLabel(ad.channel))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(ad.channel.accentColor)
@@ -154,18 +150,28 @@ struct AdDetailView: View {
                     .clipShape(Capsule())
             }
 
+            // 标签（按分类展示）
+            if !viewModel.tags.isEmpty {
+                let grouped = Dictionary(grouping: viewModel.tags) { $0.category }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(viewModel.tags) { tag in
+                            Text(tag.name)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.primary.opacity(0.65))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Constants.Colors.tagBackground)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+
+            // 标题
             Text(ad.title)
                 .font(.system(size: 22, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 4) {
-                Text(ad.sponsor)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(Constants.Colors.secondaryText)
-                Text("· 广告")
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray.opacity(0.6))
-            }
         }
     }
 
@@ -191,153 +197,182 @@ struct AdDetailView: View {
         }
     }
 
-    // MARK: - Tags
+    // MARK: - Bottom Bar
 
-    private var tagsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "tag")
-                    .font(.system(size: 13))
-                    .foregroundColor(.blue)
-                Text("智能标签")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.blue)
-            }
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            Divider()
 
-            let grouped = Dictionary(grouping: viewModel.tags) { $0.category }
-            ForEach(TagCategory.allCases, id: \.self) { category in
-                if let tags = grouped[category], !tags.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(category.displayName)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.blue.opacity(0.7))
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 6)], spacing: 6) {
-                            ForEach(tags) { tag in
-                                Text(tag.name)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.primary.opacity(0.75))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.blue.opacity(0.06))
-                                    .clipShape(Capsule())
-                            }
-                        }
+            VStack(spacing: 10) {
+                // 互动栏
+                let interactionBinding = Binding(
+                    get: { feedViewModel.interactionState(for: ad.id) },
+                    set: { feedViewModel.interactionStates[ad.id] = $0 }
+                )
+                InteractionBar(
+                    adId: ad.id,
+                    state: interactionBinding,
+                    onLike: { feedViewModel.toggleLike(for: ad.id) },
+                    onCollect: { feedViewModel.toggleCollect(for: ad.id) },
+                    onShare: { feedViewModel.incrementShare(for: ad.id) }
+                )
+
+                // AI 输入栏
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12))
+                            .foregroundColor(.purple.opacity(0.6))
+                        Text("咨询 AI 助手了解更多...")
+                            .font(.system(size: 14))
+                            .foregroundColor(Constants.Colors.secondaryText)
+                        Spacer()
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(red: 0.95, green: 0.95, blue: 0.96))
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .onTapGesture { showAISheet = true }
                 }
             }
+            .padding(.horizontal, Constants.horizontalPadding)
+            .padding(.vertical, 10)
+            .background(.white)
         }
-        .padding(14)
-        .background(Color.blue.opacity(0.02))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Interaction
+    // MARK: - AI Chat Sheet
 
-    private var interactionSection: some View {
-        let interactionBinding = Binding(
-            get: { feedViewModel.interactionState(for: ad.id) },
-            set: { feedViewModel.interactionStates[ad.id] = $0 }
-        )
-
-        return InteractionBar(
-            adId: ad.id,
-            state: interactionBinding,
-            onLike: { feedViewModel.toggleLike(for: ad.id) },
-            onCollect: { feedViewModel.toggleCollect(for: ad.id) },
-            onShare: { feedViewModel.incrementShare(for: ad.id) }
-        )
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    // MARK: - AI Chat Section
-
-    private var aiChatSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 13))
-                    .foregroundColor(.purple)
-                Text("AI 助手")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.purple)
-                Text("了解这款广告的更多信息")
-                    .font(.system(size: 11))
-                    .foregroundColor(Constants.Colors.secondaryText)
-            }
-
-            // Chat messages
-            ForEach(viewModel.chatMessages) { msg in
-                detailChatBubble(msg)
-            }
-
-            // Streaming
-            if viewModel.isChatStreaming && !viewModel.chatStreamingContent.isEmpty {
-                HStack(alignment: .top, spacing: 6) {
+    private var aiChatSheet: some View {
+        VStack(spacing: 0) {
+            // 顶栏
+            HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 10))
+                        .font(.system(size: 13))
                         .foregroundColor(.purple)
-                        .padding(.top, 4)
-
-                    Text(viewModel.chatStreamingContent)
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary.opacity(0.8))
-                        .padding(10)
-                        .background(Color.purple.opacity(0.04))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Text("AI 助手")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.purple)
+                }
+                Spacer()
+                Button {
+                    showAISheet = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.gray.opacity(0.4))
                 }
             }
+            .padding(.horizontal, Constants.horizontalPadding)
+            .padding(.vertical, 12)
 
-            // Recommended ads from chat
-            if !viewModel.chatRecommendedAds.isEmpty {
-                VStack(spacing: 8) {
-                    ForEach(viewModel.chatRecommendedAds) { similarAd in
-                        NavigationLink {
-                            AdDetailView(ad: similarAd)
-                                .environmentObject(feedViewModel)
-                        } label: {
-                            HStack(spacing: 10) {
-                                LazyImageView(imageName: similarAd.imageURL, contentMode: .fill)
-                                    .frame(width: 44, height: 44)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    .background(Color.gray.opacity(0.05))
+            Divider()
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(similarAd.title)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                    Text(similarAd.sponsor)
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Constants.Colors.secondaryText)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
+            // 消息列表
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // 开场白
+                        if viewModel.chatMessages.isEmpty && !viewModel.isChatStreaming {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "sparkles")
                                     .font(.system(size: 10))
-                                    .foregroundColor(Constants.Colors.secondaryText)
+                                    .foregroundColor(.purple)
+                                    .padding(.top, 4)
+                                Text("我是你的广告智能助手，关于「\(ad.title)」有什么想了解的？")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.primary.opacity(0.7))
+                                    .padding(10)
+                                    .background(Color.purple.opacity(0.04))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
-                            .padding(8)
-                            .background(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .shadow(color: .black.opacity(0.03), radius: 3, y: 1)
                         }
-                        .buttonStyle(.plain)
+
+                        // 对话消息
+                        ForEach(viewModel.chatMessages) { msg in
+                            detailChatBubble(msg)
+                        }
+
+                        // 流式输出
+                        if viewModel.isChatStreaming && !viewModel.chatStreamingContent.isEmpty {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.purple)
+                                    .padding(.top, 4)
+                                Text(viewModel.chatStreamingContent)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.primary.opacity(0.8))
+                                    .padding(10)
+                                    .background(Color.purple.opacity(0.04))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+
+                        // 推荐广告
+                        if !viewModel.chatRecommendedAds.isEmpty {
+                            VStack(spacing: 8) {
+                                ForEach(viewModel.chatRecommendedAds) { similarAd in
+                                    NavigationLink {
+                                        AdDetailView(ad: similarAd)
+                                            .environmentObject(feedViewModel)
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            LazyImageView(imageName: similarAd.imageURL, contentMode: .fill)
+                                                .frame(width: 44, height: 44)
+                                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(similarAd.title)
+                                                    .font(.system(size: 13, weight: .medium))
+                                                    .lineLimit(1)
+                                                Text(similarAd.sponsor)
+                                                    .font(.system(size: 11))
+                                                    .foregroundColor(Constants.Colors.secondaryText)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(Constants.Colors.secondaryText)
+                                        }
+                                        .padding(8)
+                                        .background(.white)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .shadow(color: .black.opacity(0.03), radius: 3, y: 1)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        // 错误
+                        if let error = viewModel.chatErrorMessage {
+                            Text(error)
+                                .font(.system(size: 12))
+                                .foregroundColor(.orange)
+                                .padding(8)
+                                .background(Color.orange.opacity(0.06))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+
+                        Color.clear.frame(height: 1).id("chatBottom")
                     }
+                    .padding(Constants.horizontalPadding)
+                    .padding(.vertical, 12)
+                }
+                .onChange(of: viewModel.chatStreamingContent) { _, _ in
+                    withAnimation { proxy.scrollTo("chatBottom", anchor: .bottom) }
+                }
+                .onChange(of: viewModel.chatMessages.count) { _, _ in
+                    withAnimation { proxy.scrollTo("chatBottom", anchor: .bottom) }
                 }
             }
 
-            // Error
-            if let error = viewModel.chatErrorMessage {
-                Text(error)
-                    .font(.system(size: 12))
-                    .foregroundColor(.orange)
-                    .padding(8)
-                    .background(Color.orange.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
+            Divider()
 
-            // Input
+            // 底部输入栏
             HStack(spacing: 8) {
-                TextField("询问关于此广告的问题...", text: $viewModel.chatInput, axis: .vertical)
+                TextField("询问关于此广告...", text: $viewModel.chatInput, axis: .vertical)
                     .font(.system(size: 14))
                     .focused($isChatFocused)
                     .submitLabel(.send)
@@ -361,8 +396,11 @@ struct AdDetailView: View {
                 }
                 .disabled(viewModel.chatInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+            .padding(.horizontal, Constants.horizontalPadding)
+            .padding(.vertical, 8)
+            .background(.white)
         }
-        .padding(.bottom, 32)
+        .background(Color(red: 0.97, green: 0.97, blue: 0.97))
     }
 
     private func detailChatBubble(_ msg: ChatMessage) -> some View {
@@ -373,7 +411,7 @@ struct AdDetailView: View {
                     .foregroundColor(.purple)
                     .padding(.top, 4)
             } else {
-                Spacer(minLength: 30)
+                Spacer()
             }
 
             Text(msg.content)
@@ -389,44 +427,12 @@ struct AdDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
             if msg.role == .user {
-                Spacer(minLength: 30)
+                EmptyView()
             }
         }
     }
 
     // MARK: - Helpers
-
-    private func aidCapsule(_ aid: String) -> some View {
-        Text(truncatedAID(aid))
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundColor(.gray.opacity(0.7))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color.gray.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-
-    private func truncatedAID(_ aid: String) -> String {
-        if aid.count <= 16 { return aid }
-        return "\(String(aid.prefix(8)))…\(String(aid.suffix(6)))"
-    }
-
-    private func cardTypeBadge(_ type: AdCardType) -> some View {
-        let label: String = {
-            switch type {
-            case .bigImage: return "大图"
-            case .smallImage: return "小图"
-            case .video: return "视频"
-            }
-        }()
-        return Text(label)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Constants.Colors.tagBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
 
     private func channelLabel(_ channel: Channel) -> String {
         channel.displayName

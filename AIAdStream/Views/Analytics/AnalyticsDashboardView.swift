@@ -6,22 +6,21 @@ struct AnalyticsDashboardView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                tabSelector
+                // 创作者信息头部
+                creatorHeader
+
+                // Tab 切换
+                creatorTabSelector
                 Divider()
 
+                // 内容区
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        if viewModel.totalEvents == 0 {
-                            emptyState
-                        } else {
-                            switch viewModel.selectedTab {
-                            case .overview:
-                                overviewTab
-                            case .content:
-                                contentTab
-                            case .events:
-                                eventsTab
-                            }
+                        switch viewModel.selectedCreatorTab {
+                        case .myAds:
+                            myAdsTab
+                        case .analytics:
+                            analyticsTabContent
                         }
                     }
                     .padding(Constants.horizontalPadding)
@@ -30,15 +29,368 @@ struct AnalyticsDashboardView: View {
                 }
             }
             .background(Color(red: 0.97, green: 0.97, blue: 0.97))
-            .navigationTitle("数据看板")
+            .navigationTitle("创作者中心")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if viewModel.selectedCreatorTab == .myAds {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            viewModel.showUploadSheet = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $viewModel.showUploadSheet) {
+                uploadAdSheet
+            }
             .onAppear { viewModel.refresh() }
         }
     }
 
-    // MARK: - Tab Selector
+    // MARK: - Creator Header
 
-    private var tabSelector: some View {
+    private var creatorHeader: some View {
+        VStack(spacing: 12) {
+            // 头像和名称
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [.blue, .purple.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("广告创作者")
+                        .font(.system(size: 17, weight: .bold))
+                    Text("管理你的广告投放与数据表现")
+                        .font(.system(size: 12))
+                        .foregroundColor(Constants.Colors.secondaryText)
+                }
+
+                Spacer()
+            }
+
+            // 数据概览
+            HStack(spacing: 0) {
+                headerStat(value: "\(viewModel.userAdCount)", label: "投放中", color: .blue)
+                Divider().frame(height: 28)
+                headerStat(value: "\(viewModel.userAdImpressions)", label: "曝光", color: .green)
+                Divider().frame(height: 28)
+                headerStat(value: "\(viewModel.userAdClicks)", label: "点击", color: .orange)
+                Divider().frame(height: 28)
+                headerStat(value: "\(viewModel.userAdInteractions)", label: "互动", color: .pink)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 4)
+        }
+        .padding(.horizontal, Constants.horizontalPadding)
+        .padding(.vertical, 14)
+        .background(.white)
+    }
+
+    private func headerStat(value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(Constants.Colors.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Creator Tab Selector
+
+    private var creatorTabSelector: some View {
+        HStack(spacing: 0) {
+            ForEach(CreatorTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        viewModel.selectedCreatorTab = tab
+                    }
+                } label: {
+                    VStack(spacing: 6) {
+                        HStack(spacing: 5) {
+                            Image(systemName: tab == .myAds ? "megaphone.fill" : "chart.bar.fill")
+                                .font(.system(size: 12))
+                            Text(tab.rawValue)
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundColor(viewModel.selectedCreatorTab == tab ? .blue : .gray)
+
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(viewModel.selectedCreatorTab == tab ? Color.blue : Color.clear)
+                            .frame(height: 2.5)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .background(.white)
+    }
+
+    // MARK: - My Ads Tab
+
+    private var myAdsTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if viewModel.userAds.isEmpty {
+                emptyMyAds
+            } else {
+                ForEach(viewModel.userAds) { ad in
+                    userAdCard(ad)
+                }
+            }
+        }
+    }
+
+    private var emptyMyAds: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 40)
+
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.08))
+                    .frame(width: 80, height: 80)
+                Image(systemName: "megaphone")
+                    .font(.system(size: 32))
+                    .foregroundColor(.blue.opacity(0.4))
+            }
+
+            VStack(spacing: 6) {
+                Text("还没有投放广告")
+                    .font(.system(size: 16, weight: .medium))
+                Text("点击右上角 + 开始创建你的第一条广告，\n查看广告数据表现")
+                    .font(.system(size: 13))
+                    .foregroundColor(Constants.Colors.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                viewModel.showUploadSheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("创建广告")
+                }
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+                .background(Color.blue)
+                .clipShape(Capsule())
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+    }
+
+    private func userAdCard(_ ad: UserAd) -> some View {
+        let stats = viewModel.statsForUserAd(ad)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            // 标题行
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ad.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                    Text(ad.sponsor)
+                        .font(.system(size: 12))
+                        .foregroundColor(Constants.Colors.secondaryText)
+                }
+
+                Spacer()
+
+                // 删除按钮
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                        viewModel.deleteUserAd(ad)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red.opacity(0.6))
+                }
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+            }
+
+            // 标签
+            if !ad.tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(ad.tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.primary.opacity(0.6))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Constants.Colors.tagBackground)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+
+            // 描述
+            Text(ad.description)
+                .font(.system(size: 12))
+                .foregroundColor(.primary.opacity(0.5))
+                .lineLimit(2)
+
+            // 数据指标
+            HStack(spacing: 20) {
+                adMetric("曝光", stats.impressions, .blue)
+                adMetric("点击", stats.clicks, .green)
+                adMetric("点赞", stats.likes, .pink)
+                adMetric("收藏", stats.collects, .orange)
+                adMetric("分享", stats.shares, .purple)
+                Spacer()
+            }
+            .padding(.top, 4)
+
+            // 时间
+            HStack {
+                Spacer()
+                Text(formatDate(ad.createdAt))
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray.opacity(0.5))
+            }
+        }
+        .padding(14)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
+        .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
+    }
+
+    private func adMetric(_ label: String, _ value: Int, _ color: Color) -> some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(color)
+                .frame(width: 5, height: 5)
+            Text("\(value)")
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundColor(.primary)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(Constants.Colors.secondaryText)
+        }
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        if Calendar.current.isDateInToday(date) {
+            formatter.dateFormat = "HH:mm"
+        } else {
+            formatter.dateFormat = "MM-dd HH:mm"
+        }
+        return "投放于 " + formatter.string(from: date)
+    }
+
+    // MARK: - Upload Sheet
+
+    private var uploadAdSheet: some View {
+        NavigationStack {
+            Form {
+                Section("基本信息") {
+                    TextField("广告标题", text: $viewModel.newAdTitle)
+                    TextField("品牌/赞助商", text: $viewModel.newAdSponsor)
+                }
+
+                Section("广告描述") {
+                    TextEditor(text: $viewModel.newAdDescription)
+                        .frame(minHeight: 80)
+                }
+
+                Section("频道") {
+                    Picker("频道", selection: $viewModel.newAdChannel) {
+                        ForEach(viewModel.channelOptions, id: \.value) { opt in
+                            Text(opt.label).tag(opt.value)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("卡片类型") {
+                    Picker("卡片类型", selection: $viewModel.newAdCardType) {
+                        ForEach(viewModel.cardTypeOptions, id: \.value) { opt in
+                            Text(opt.label).tag(opt.value)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("标签（逗号分隔）") {
+                    TextField("如: 科技, 潮流, 学生", text: $viewModel.newAdTagsText)
+                }
+
+                Section {
+                    Button {
+                        viewModel.uploadAd()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("发布广告")
+                                .font(.system(size: 16, weight: .medium))
+                            Spacer()
+                        }
+                    }
+                    .disabled(viewModel.newAdTitle.trimmingCharacters(in: .whitespaces).isEmpty
+                        || viewModel.newAdSponsor.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .navigationTitle("创建广告")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("取消") {
+                        viewModel.showUploadSheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    // MARK: - Analytics Tab (原有数据看板)
+
+    private var analyticsTabContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if viewModel.totalEvents == 0 {
+                analyticsEmptyState
+            } else {
+                analyticsInternalTabSelector
+                Divider()
+
+                switch viewModel.selectedTab {
+                case .overview:
+                    overviewTab
+                case .content:
+                    contentTab
+                case .events:
+                    eventsTab
+                }
+            }
+        }
+    }
+
+    private var analyticsInternalTabSelector: some View {
         HStack(spacing: 0) {
             ForEach(AnalyticsTab.allCases, id: \.self) { tab in
                 Button {
@@ -69,17 +421,7 @@ struct AnalyticsDashboardView: View {
         .background(.white)
     }
 
-    private func tabIcon(_ tab: AnalyticsTab) -> String {
-        switch tab {
-        case .overview: return "chart.pie.fill"
-        case .content: return "list.bullet.rectangle"
-        case .events: return "clock.arrow.2.circlepath"
-        }
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
+    private var analyticsEmptyState: some View {
         VStack(spacing: 16) {
             Spacer().frame(height: 60)
             Image(systemName: "chart.bar.xaxis.ascending")
@@ -94,6 +436,14 @@ struct AnalyticsDashboardView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 40)
+    }
+
+    private func tabIcon(_ tab: AnalyticsTab) -> String {
+        switch tab {
+        case .overview: return "chart.pie.fill"
+        case .content: return "list.bullet.rectangle"
+        case .events: return "clock.arrow.2.circlepath"
+        }
     }
 
     // MARK: - Overview Tab
@@ -266,7 +616,6 @@ struct AnalyticsDashboardView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
             } else {
-                // 表头
                 HStack(spacing: 0) {
                     Text("AID")
                         .frame(width: 80, alignment: .leading)
@@ -518,7 +867,7 @@ struct AnalyticsDashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
     }
 
-    // MARK: - AID Capsule
+    // MARK: - Shared Components
 
     private func aidCapsule(_ aid: String) -> some View {
         Text(truncatedAID(aid))
@@ -536,8 +885,6 @@ struct AnalyticsDashboardView: View {
         let suffix = String(aid.suffix(6))
         return "\(prefix)…\(suffix)"
     }
-
-    // MARK: - Shared Components
 
     private func sectionHeader(_ title: String, icon: String) -> some View {
         HStack(spacing: 6) {

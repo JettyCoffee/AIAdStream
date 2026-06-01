@@ -19,6 +19,25 @@ final class FeedViewModel: ObservableObject {
     private let db = DatabaseManager.shared
     private var currentPage = 0
 
+    /// 用户偏好标签（从 UserDefaults 读取）
+    private var favoriteTags: [String] {
+        guard let data = UserDefaults.standard.data(forKey: "favorite_tags"),
+              let tags = try? JSONDecoder().decode([String].self, from: data)
+        else { return [] }
+        return tags
+    }
+
+    /// 根据用户偏好标签对广告重新排序：匹配标签越多越靠前
+    private func applyRecommendation(_ incomingAds: [AdItem]) -> [AdItem] {
+        let favTags = favoriteTags
+        guard !favTags.isEmpty else { return incomingAds }
+        return incomingAds.sorted { a, b in
+            let scoreA = a.tags.filter { favTags.contains($0.name) }.count
+            let scoreB = b.tags.filter { favTags.contains($0.name) }.count
+            return scoreA > scoreB
+        }
+    }
+
     var allAdsForCurrentChannel: [AdItem] {
         dataService.allAds(for: currentChannel)
     }
@@ -55,7 +74,12 @@ final class FeedViewModel: ObservableObject {
     }
 
     func applyTagFilter(_ tagName: String?) {
-        activeTagFilter = tagName
+        // 点击已激活的标签时取消筛选
+        if tagName != nil && activeTagFilter == tagName {
+            activeTagFilter = nil
+        } else {
+            activeTagFilter = tagName
+        }
         currentPage = 0
         hasMore = true
         isFiltering = true
@@ -72,7 +96,10 @@ final class FeedViewModel: ObservableObject {
                 tagFilter: activeTagFilter
             )
             if page == 1 {
-                ads = pageResult.ads
+                // 首页且无标签筛选时应用用户偏好排序
+                ads = activeTagFilter == nil
+                    ? applyRecommendation(pageResult.ads)
+                    : pageResult.ads
             } else {
                 ads.append(contentsOf: pageResult.ads)
             }

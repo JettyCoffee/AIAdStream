@@ -35,6 +35,12 @@ final class DatabaseManager {
     }
 
     private func createTables() {
+        createAdTables()
+        createInteractionAndAnalyticsTables()
+    }
+
+    /// 仅创建 ad_items 与 ad_tags 表（种子重播时调用）
+    private func createAdTables() {
         let createAdsTable = """
         CREATE TABLE IF NOT EXISTS ad_items (
             id TEXT PRIMARY KEY,
@@ -59,6 +65,16 @@ final class DatabaseManager {
         );
         """
 
+        for sql in [createAdsTable, createTagsTable] {
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    private func createInteractionAndAnalyticsTables() {
         let createInteractionsTable = """
         CREATE TABLE IF NOT EXISTS interaction_states (
             ad_id TEXT PRIMARY KEY,
@@ -81,8 +97,7 @@ final class DatabaseManager {
         );
         """
 
-        let statements = [createAdsTable, createTagsTable, createInteractionsTable, createAnalyticsTable]
-        for sql in statements {
+        for sql in [createInteractionsTable, createAnalyticsTable] {
             var stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
                 sqlite3_step(stmt)
@@ -107,8 +122,11 @@ final class DatabaseManager {
 
         if adCount > 0 {
             print("[DB] Re-seeding: clearing \(adCount) old ads for version \(storedVersion) → \(Self.currentSeedVersion)")
-            executeUpdate("DELETE FROM ad_tags") { _ in }
-            executeUpdate("DELETE FROM ad_items") { _ in }
+            // 删除旧表以确保 schema 与种子库兼容，避免旧列约束导致 INSERT 失败
+            executeUpdate("DROP TABLE IF EXISTS ad_tags") { _ in }
+            executeUpdate("DROP TABLE IF EXISTS ad_items") { _ in }
+            // 重建新 schema 的表
+            createAdTables()
         }
 
         guard let seedURL = Bundle.main.url(forResource: "seed_ads", withExtension: "sqlite") else {
@@ -271,7 +289,7 @@ final class DatabaseManager {
                 sql += " AND a.channel = ?"
                 params.append(ch)
             }
-            sql += " ORDER BY a.ctr DESC LIMIT 20"
+            sql += " ORDER BY a.id LIMIT 20"
 
             let rows = executeQuery(sql) { stmt in
                 for (i, param) in params.enumerated() {
@@ -498,32 +516,34 @@ final class DatabaseManager {
 
     // MARK: - Low-level SQLite helpers
 
-    private func insertAd(_ ad: AdItem) {
-        executeUpdate("""
-        INSERT OR REPLACE INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, ai_summary)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """) { stmt in
-            sqlite3_bind_text(stmt, 1, (ad.id as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (ad.title as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (ad.description as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 4, (ad.imageURL as NSString).utf8String, -1, nil)
-            if let vu = ad.videoURL {
-                sqlite3_bind_text(stmt, 5, (vu as NSString).utf8String, -1, nil)
-            } else { sqlite3_bind_null(stmt, 5) }
-            sqlite3_bind_text(stmt, 6, (ad.cardType.rawValue as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 7, (ad.channel.rawValue as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 8, (ad.sponsor as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 9, (ad.aiSummary as NSString).utf8String, -1, nil)
-        }
+    func insertAd(_ ad: AdItem) {
+        dbQueue.sync {
+            executeUpdate("""
+            INSERT OR REPLACE INTO ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, ai_summary)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """) { stmt in
+                sqlite3_bind_text(stmt, 1, (ad.id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (ad.title as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 3, (ad.description as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 4, (ad.imageURL as NSString).utf8String, -1, nil)
+                if let vu = ad.videoURL {
+                    sqlite3_bind_text(stmt, 5, (vu as NSString).utf8String, -1, nil)
+                } else { sqlite3_bind_null(stmt, 5) }
+                sqlite3_bind_text(stmt, 6, (ad.cardType.rawValue as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 7, (ad.channel.rawValue as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 8, (ad.sponsor as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 9, (ad.aiSummary as NSString).utf8String, -1, nil)
+            }
 
-        for tag in ad.tags {
-            executeUpdate(
-                "INSERT OR REPLACE INTO ad_tags (id, ad_id, name, category) VALUES (?, ?, ?, ?)"
-            ) { stmt in
-                sqlite3_bind_text(stmt, 1, (tag.id as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 2, (ad.id as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 3, (tag.name as NSString).utf8String, -1, nil)
-                sqlite3_bind_text(stmt, 4, (tag.category.rawValue as NSString).utf8String, -1, nil)
+            for tag in ad.tags {
+                executeUpdate(
+                    "INSERT OR REPLACE INTO ad_tags (id, ad_id, name, category) VALUES (?, ?, ?, ?)"
+                ) { stmt in
+                    sqlite3_bind_text(stmt, 1, (tag.id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 2, (ad.id as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 3, (tag.name as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 4, (tag.category.rawValue as NSString).utf8String, -1, nil)
+                }
             }
         }
     }

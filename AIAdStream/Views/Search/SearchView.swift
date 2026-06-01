@@ -190,7 +190,7 @@ struct SearchView: View {
                     .clipShape(Circle())
                     .padding(.top, 2)
             } else {
-                Spacer(minLength: 40)
+                Spacer()
             }
 
             Text(msg.content)
@@ -206,7 +206,7 @@ struct SearchView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
             if msg.role == .user {
-                Spacer(minLength: 40)
+                EmptyView()
             }
         }
     }

@@ -30,15 +30,17 @@ enum Constants {
         - search_ads：根据用户描述搜索匹配的广告
         - get_ad_detail：获取某条广告的详细信息
         - get_similar_ads：查找与某广告相似的其他广告
+        - web_search：联网搜索广告相关的补充信息（品牌背景、产品评测、市场行情等）
 
         回复规则（严格遵守）：
-        1. 收到用户查询后，必须先调用 search_ads 搜索广告
+        1. 第一次收到用户查询，必须先调用 search_ads 搜索广告
         2. 搜索完成后，广告会以精美的视觉卡片形式自动展示给用户
         3. 你只需在搜索完成后写 1-2 句简洁的推荐总结，例如"这几款都很适合你，第一双透气性尤其好"
         4. 严禁使用任何列表格式（数字编号、Markdown 标题、表格等）逐一列举广告
         5. 严禁重复广告标题、品牌名等已在卡片上展示的信息
         6. 当用户询问某条广告详情时，调用 get_ad_detail 获取完整信息再回复
-        7. 保持回复极简，使用中文
+        7. 当用户询问产品评测、品牌背景、市场对比等需要外部信息的问题时，可调用 web_search 联网搜索补充信息
+        8. 保持回复极简，使用中文
         """
 
         static let tools: [ToolDef] = [
@@ -73,6 +75,16 @@ enum Constants {
                         "ad_id": .string(description: "参考广告的 ID"),
                         "limit": .integer(description: "返回数量，默认 3"),
                     ], required: ["ad_id"])
+                )
+            ),
+            ToolDef(
+                type: "function",
+                function: FunctionDef(
+                    name: "web_search",
+                    description: "联网搜索广告相关的补充信息，如品牌背景、产品评测、市场行情、竞品对比等。当用户询问需要外部知识的问题时使用。",
+                    parameters: .object([
+                        "query": .string(description: "搜索查询词，应为简洁的关键词组合"),
+                    ], required: ["query"])
                 )
             ),
         ]

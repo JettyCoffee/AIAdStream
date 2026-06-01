@@ -17,6 +17,7 @@ struct VideoCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 视频区
             ZStack {
                 Rectangle().fill(.black)
                 if let player = player {
@@ -26,50 +27,15 @@ struct VideoCard: View {
                     LazyImageView(imageName: ad.imageURL, contentMode: .fill).clipped()
                 }
 
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.5)],
-                    startPoint: .center,
-                    endPoint: .bottom
-                )
-
-                if !isPlaying {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                }
-
-                VStack {
-                    Spacer()
-                    HStack {
-                        Button {
-                            togglePlay()
-                        } label: {
-                            Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
-                        }
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-
-                        Spacer()
-
-                        Button {
-                            isMuted.toggle()
-                            player?.isMuted = isMuted
-                        } label: {
-                            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white)
-                                .padding(8)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
-                        .frame(width: 44, height: 44)
+                CardVideoOverlay(
+                    isPlaying: isPlaying,
+                    isMuted: isMuted,
+                    onTogglePlay: { togglePlay() },
+                    onToggleMute: {
+                        isMuted.toggle()
+                        player?.isMuted = isMuted
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 8)
-                }
+                )
             }
             .frame(height: 260)
             .highPriorityGesture(
@@ -82,43 +48,23 @@ struct VideoCard: View {
                 }
             )
 
+            // 信息区
             VStack(alignment: .leading, spacing: 10) {
-                Text(ad.sponsor)
+                CardSponsorLabel(sponsor: ad.sponsor)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Constants.Colors.secondaryText)
 
-                Text(ad.title)
-                    .font(.system(size: 16, weight: .semibold))
-
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11))
-                        .foregroundColor(.purple.opacity(0.6))
-                        .padding(.top, 1)
-                    Text(ad.aiSummary)
-                        .font(.system(size: 13))
-                        .foregroundColor(.primary.opacity(0.7))
-                        .lineSpacing(3)
-                        .lineLimit(2)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.purple.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                CardTitleLabel(title: ad.title)
 
                 if !ad.tags.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(ad.tags) { tag in
-                                TagChipView(
-                                    tag: tag,
-                                    isHighlighted: tag.name == activeTagFilter,
-                                    highlightColor: ad.channel.accentColor
-                                ) { onTagTap(tag) }
-                            }
-                        }
-                    }
+                    CardTagRow(
+                        tags: ad.tags,
+                        highlightedTagName: activeTagFilter,
+                        highlightColor: ad.channel.accentColor,
+                        onTagTap: onTagTap
+                    )
                 }
+
+                CardAISummary(text: ad.aiSummary)
 
                 InteractionBar(
                     adId: ad.id,
@@ -132,10 +78,7 @@ struct VideoCard: View {
             .padding(16)
             .background(.white)
         }
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-        .padding(.horizontal, 16)
+        .cardStyle()
         .onChange(of: isActive) { _, active in
             if active {
                 setupPlayer()

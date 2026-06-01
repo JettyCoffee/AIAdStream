@@ -11,6 +11,7 @@ struct BigImageCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 大图区
             ZStack(alignment: .bottomLeading) {
                 LazyImageView(imageName: ad.imageURL, contentMode: .fill)
                     .frame(height: 220)
@@ -23,65 +24,24 @@ struct BigImageCard: View {
                 )
                 .frame(height: 80)
 
-                Text(ad.title)
+                CardTitleLabel(title: ad.title, lineLimit: 2)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
-                    .lineLimit(2)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                        .foregroundColor(.purple.opacity(0.5))
-                        .padding(.top, 1)
-                    Text(ad.aiSummary)
-                        .font(.system(size: 12))
-                        .foregroundColor(.primary.opacity(0.65))
-                        .lineSpacing(3)
-                        .lineLimit(2)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.purple.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                if !ad.tags.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(ad.tags) { tag in
-                                TagChipView(
-                                    tag: tag,
-                                    isHighlighted: tag.name == activeTagFilter,
-                                    highlightColor: ad.channel.accentColor
-                                ) { onTagTap(tag) }
-                            }
-                        }
-                    }
-                }
-
-                HStack {
-                    Text(ad.sponsor)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Constants.Colors.secondaryText)
-                    Spacer()
-                    InteractionBar(
-                        adId: ad.id,
-                        state: interactionState,
-                        onLike: onLike,
-                        onCollect: onCollect,
-                        onShare: onShare
-                    )
-                }
-            }
-            .padding(16)
-            .background(.white)
+            // 信息区
+            CardInfoSection(
+                ad: ad,
+                interactionState: interactionState,
+                onLike: onLike,
+                onCollect: onCollect,
+                onShare: onShare,
+                onTagTap: onTagTap,
+                activeTagFilter: activeTagFilter
+            )
         }
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-        .padding(.horizontal, 16)
+        .cardStyle()
     }
 }

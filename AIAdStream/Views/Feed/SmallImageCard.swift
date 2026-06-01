@@ -15,49 +15,18 @@ struct SmallImageCard: View {
                 .frame(width: 120, height: 120)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(ad.sponsor)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Constants.Colors.secondaryText)
-
-                Text(ad.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(2)
-
-                Text(ad.aiSummary)
-                    .font(.system(size: 11))
-                    .foregroundColor(.primary.opacity(0.55))
-                    .lineLimit(2)
-
-                if !ad.tags.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(ad.tags.prefix(3)) { tag in
-                                TagChipView(
-                                    tag: tag,
-                                    isHighlighted: tag.name == activeTagFilter,
-                                    highlightColor: ad.channel.accentColor
-                                ) { onTagTap(tag) }
-                            }
-                        }
-                    }
-                }
-
-                InteractionBar(
-                    adId: ad.id,
-                    state: interactionState,
-                    onLike: onLike,
-                    onCollect: onCollect,
-                    onShare: onShare
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+            CardInfoSectionCompact(
+                ad: ad,
+                interactionState: interactionState,
+                onLike: onLike,
+                onCollect: onCollect,
+                onShare: onShare,
+                onTagTap: onTagTap,
+                activeTagFilter: activeTagFilter
+            )
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-        .padding(.horizontal, 16)
+        .cardStyle()
     }
 }
