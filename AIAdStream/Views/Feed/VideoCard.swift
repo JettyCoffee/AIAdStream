@@ -11,6 +11,10 @@ struct VideoCard: View {
     let isActive: Bool
     var activeTagFilter: String?
 
+    var enhancedContent: String? = nil
+    var isEnhancing: Bool = false
+    var onEnhance: (() -> Void)? = nil
+
     @State private var isPlaying = false
     @State private var isMuted = true
     @State private var player: AVPlayer?
@@ -66,17 +70,28 @@ struct VideoCard: View {
 
                 CardAISummary(text: ad.aiSummary)
 
-                InteractionBar(
-                    adId: ad.id,
-                    state: interactionState,
-                    onLike: onLike,
-                    onCollect: onCollect,
-                    onShare: onShare
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                if let content = enhancedContent {
+                    EnhanceBanner(text: content) { onEnhance?() }
+                }
+
+                HStack {
+                    EnhanceButton(
+                        isLoading: isEnhancing,
+                        hasContent: enhancedContent != nil,
+                        action: { onEnhance?() }
+                    )
+                    Spacer()
+                    InteractionBar(
+                        adId: ad.id,
+                        state: interactionState,
+                        onLike: onLike,
+                        onCollect: onCollect,
+                        onShare: onShare
+                    )
+                }
             }
             .padding(16)
-            .background(.white)
+            .background(Color(.systemBackground))
         }
         .cardStyle()
         .onChange(of: isActive) { _, active in

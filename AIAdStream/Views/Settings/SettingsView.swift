@@ -14,6 +14,9 @@ struct SettingsView: View {
             }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: viewModel.apiKey) { _, newKey in
+                viewModel.saveAPIKey(newKey)
+            }
         }
     }
 

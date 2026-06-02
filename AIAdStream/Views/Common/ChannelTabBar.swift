@@ -28,6 +28,6 @@ struct ChannelTabBar: View {
         .padding(.horizontal, Constants.horizontalPadding)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background(.white)
+        .background(.regularMaterial)
     }
 }

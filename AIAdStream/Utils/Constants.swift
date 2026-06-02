@@ -20,9 +20,19 @@ enum Constants {
     // MARK: - DeepSeek API
 
     enum DeepSeek {
-        /// 从设置页 UserDefaults 读取，未配置时返回空字符串
+        /// 从 Keychain 读取 API Key，未配置时尝试从 UserDefaults 迁移
         static var apiKey: String {
-            UserDefaults.standard.string(forKey: "deepseek_api_key") ?? ""
+            // 优先从 Keychain 读取
+            if let key = try? KeychainService.shared.load(), !key.isEmpty {
+                return key
+            }
+            // 迁移旧版 UserDefaults 中的 Key
+            if let legacy = UserDefaults.standard.string(forKey: "deepseek_api_key"), !legacy.isEmpty {
+                try? KeychainService.shared.save(legacy)
+                UserDefaults.standard.removeObject(forKey: "deepseek_api_key")
+                return legacy
+            }
+            return ""
         }
 
         static let systemPrompt = """
@@ -31,6 +41,7 @@ enum Constants {
         - get_ad_detail：获取某条广告的详细信息
         - get_similar_ads：查找与某广告相似的其他广告
         - web_search：联网搜索广告相关的补充信息（品牌背景、产品评测、市场行情等）
+        - ai_enhance_ad：对广告进行趣味改写，生成幽默段子、诗歌、故事或创意标语
 
         回复规则（严格遵守）：
         1. 第一次收到用户查询，必须先调用 search_ads 搜索广告
@@ -40,7 +51,8 @@ enum Constants {
         5. 严禁重复广告标题、品牌名等已在卡片上展示的信息
         6. 当用户询问某条广告详情时，调用 get_ad_detail 获取完整信息再回复
         7. 当用户询问产品评测、品牌背景、市场对比等需要外部信息的问题时，可调用 web_search 联网搜索补充信息
-        8. 保持回复极简，使用中文
+        8. 当用户点击"趣味解读"按钮时，调用 ai_enhance_ad 生成趣味内容，风格需符合指定 style
+        9. 保持回复极简，使用中文
         """
 
         static let tools: [ToolDef] = [
@@ -85,6 +97,17 @@ enum Constants {
                     parameters: .object([
                         "query": .string(description: "搜索查询词，应为简洁的关键词组合"),
                     ], required: ["query"])
+                )
+            ),
+            ToolDef(
+                type: "function",
+                function: FunctionDef(
+                    name: "ai_enhance_ad",
+                    description: "对广告内容进行趣味改写。根据广告信息生成幽默段子、打油诗、微型故事或创意标语，让广告变得更有趣、更容易被用户接受。",
+                    parameters: .object([
+                        "ad_id": .string(description: "广告 ID"),
+                        "style": .string(description: "改写风格：funny（幽默段子）/ poetic（打油诗）/ story（微型故事）/ slogan（创意标语），默认 funny"),
+                    ], required: ["ad_id"])
                 )
             ),
         ]

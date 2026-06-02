@@ -15,9 +15,7 @@ final class SearchViewModel: ObservableObject {
         items.compactMap(\.message).filter { $0.role != .system }
     }
 
-    private var aiService: AIService {
-        AIService(apiKey: Constants.DeepSeek.apiKey)
-    }
+    private let aiService = AIService.shared
     private let analytics = AnalyticsService.shared
     private let db = DatabaseManager.shared
     private var streamTask: Task<Void, Never>?

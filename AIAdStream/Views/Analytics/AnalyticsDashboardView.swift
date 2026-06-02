@@ -28,7 +28,7 @@ struct AnalyticsDashboardView: View {
                     .padding(.bottom, 32)
                 }
             }
-            .background(Color(red: 0.97, green: 0.97, blue: 0.97))
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("创作者中心")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -97,7 +97,7 @@ struct AnalyticsDashboardView: View {
         }
         .padding(.horizontal, Constants.horizontalPadding)
         .padding(.vertical, 14)
-        .background(.white)
+        .background(Color(.systemBackground))
     }
 
     private func headerStat(value: String, label: String, color: Color) -> some View {
@@ -142,7 +142,7 @@ struct AnalyticsDashboardView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        .background(.white)
+        .background(Color(.systemBackground))
     }
 
     // MARK: - My Ads Tab
@@ -274,7 +274,7 @@ struct AnalyticsDashboardView: View {
             }
         }
         .padding(14)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
         .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }
@@ -418,7 +418,7 @@ struct AnalyticsDashboardView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        .background(.white)
+        .background(Color(.systemBackground))
     }
 
     private var analyticsEmptyState: some View {
@@ -513,7 +513,7 @@ struct AnalyticsDashboardView: View {
             }
         }
         .padding(14)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
     }
 
@@ -545,7 +545,7 @@ struct AnalyticsDashboardView: View {
             }
         }
         .padding(14)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
     }
 
@@ -587,7 +587,7 @@ struct AnalyticsDashboardView: View {
             }
         }
         .padding(14)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
     }
 
@@ -642,7 +642,7 @@ struct AnalyticsDashboardView: View {
             }
         }
         .padding(14)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
     }
 
@@ -819,7 +819,7 @@ struct AnalyticsDashboardView: View {
             }
         }
         .padding(14)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
     }
 
@@ -863,7 +863,7 @@ struct AnalyticsDashboardView: View {
             }
         }
         .padding(14)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
     }
 
@@ -1025,7 +1025,7 @@ struct StatCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: Constants.cornerRadius))
         .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }

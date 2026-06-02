@@ -154,12 +154,25 @@ enum DeepSeekError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            return "无法连接到 DeepSeek 服务"
-        case .httpError(let code, let body):
-            return "请求失败 (\(code)): \(body.prefix(200))"
+            return "无法连接到 AI 服务"
+        case .httpError(let code, _):
+            switch code {
+            case 401: return "API Key 无效，请在设置中检查"
+            case 429: return "请求过于频繁，请稍后重试"
+            case 500...599: return "服务暂时不可用，请稍后重试"
+            default: return "服务暂时不可用 (\(code))，请稍后重试"
+            }
         case .invalidToolArguments:
             return "工具参数解析失败"
         }
+    }
+
+    /// 是否为瞬时错误（可重试）
+    var isTransient: Bool {
+        if case .httpError(let code, _) = self {
+            return code >= 500 || code == 429
+        }
+        return false
     }
 }
 

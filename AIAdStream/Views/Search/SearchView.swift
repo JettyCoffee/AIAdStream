@@ -106,7 +106,7 @@ struct SearchView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(.white)
+                    .background(Color(.systemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .shadow(color: .black.opacity(0.03), radius: 3, y: 1)
                 }
@@ -291,7 +291,7 @@ struct SearchView: View {
                 .foregroundColor(Constants.Colors.secondaryText)
         }
         .padding(10)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }

@@ -64,11 +64,11 @@ struct LazyImageView: View {
     @ViewBuilder
     private var placeholderView: some View {
         let colors: [Color] = [
-            Color(red: 0.93, green: 0.94, blue: 0.96),
-            Color(red: 0.90, green: 0.86, blue: 0.89),
-            Color(red: 0.86, green: 0.90, blue: 0.87),
-            Color(red: 0.86, green: 0.88, blue: 0.92),
-            Color(red: 0.91, green: 0.89, blue: 0.86),
+            Color(red: 0.78, green: 0.80, blue: 0.84),
+            Color(red: 0.74, green: 0.70, blue: 0.74),
+            Color(red: 0.70, green: 0.75, blue: 0.72),
+            Color(red: 0.72, green: 0.74, blue: 0.78),
+            Color(red: 0.76, green: 0.74, blue: 0.70),
         ]
         let colorIndex = abs(imageName.hashValue) % colors.count
 
@@ -76,8 +76,8 @@ struct LazyImageView: View {
             .fill(colors[colorIndex])
             .overlay {
                 Image(systemName: loadFailed ? "photo.badge.exclamationmark" : "photo")
-                    .font(.system(size: 32))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.system(size: 40))
+                    .foregroundColor(.white.opacity(0.3))
             }
     }
 }

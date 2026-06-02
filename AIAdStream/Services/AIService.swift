@@ -3,12 +3,15 @@ import Foundation
 // MARK: - AI Service (DeepSeek Orchestration)
 
 final class AIService {
-    private let deepSeek: DeepSeekService
-    private let db = DatabaseManager.shared
+    static let shared = AIService()
 
-    init(apiKey: String) {
-        self.deepSeek = DeepSeekService(apiKey: apiKey)
+    private var deepSeek: DeepSeekService {
+        DeepSeekService(apiKey: Constants.DeepSeek.apiKey)
     }
+    private let db = DatabaseManager.shared
+    private let rateLimiter = RateLimiter(minInterval: 2.0)
+
+    private init() {}
 
     // MARK: - General Chat (Search Tab)
 
@@ -50,6 +53,17 @@ final class AIService {
     ) -> AsyncThrowingStream<StreamEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
+                // 预检：API Key 未配置
+                guard !Constants.DeepSeek.apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
+                    continuation.finish(throwing: AIServiceError.apiKeyNotConfigured)
+                    return
+                }
+                // 限流检查
+                guard rateLimiter.shouldProceed() else {
+                    continuation.finish(throwing: AIServiceError.rateLimited)
+                    return
+                }
+
                 var messages = [ChatMessage(role: .system, content: systemPrompt)] + history
 
                 for _ in 0..<5 {
@@ -85,6 +99,12 @@ final class AIService {
                                 name: "search_ads",
                                 arguments: "{\"query\":\"\(query.replacingOccurrences(of: "\"", with: "\\\""))\"}"
                             )
+                            // 回退结果同样追加到消息历史，确保 LLM 知晓已展示的广告
+                            messages.append(ChatMessage(
+                                role: .tool,
+                                content: resultText,
+                                toolCallId: "fallback_search"
+                            ))
                             continuation.yield(.toolCallResult(ToolResult(
                                 toolName: "search_ads",
                                 ads: resultAds,
@@ -158,6 +178,9 @@ final class AIService {
             return (text, ads, nil)
         case "web_search":
             let text = await executeWebSearch(json)
+            return (text, [], nil)
+        case "ai_enhance_ad":
+            let text = executeEnhanceAd(json)
             return (text, [], nil)
         default:
             return ("未知工具: \(name)", [], nil)
@@ -249,6 +272,43 @@ final class AIService {
         return (text, Array(similar))
     }
 
+    /// 趣味改写广告：返回广告数据供 LLM 参考生成趣味内容
+    private func executeEnhanceAd(_ args: [String: Any]) -> String {
+        guard let adId = args["ad_id"] as? String,
+              let ad = db.fetchAd(by: adId)
+        else { return "未找到该广告。" }
+
+        let style = args["style"] as? String ?? "funny"
+        let tags = db.tagsForAd(adId).map(\.name).joined(separator: "、")
+        let data: [String: Any] = [
+            "adTitle": ad.title,
+            "sponsor": ad.sponsor,
+            "description": ad.description,
+            "tags": tags,
+            "requestedStyle": style,
+            "styleGuide": styleGuide(for: style),
+        ]
+        return ((try? JSONSerialization.data(
+            withJSONObject: data, options: .prettyPrinted
+        )).flatMap { String(data: $0, encoding: .utf8) }) ?? "{}"
+    }
+
+    /// 风格指引：告诉 LLM 这个风格应该怎么改写
+    private func styleGuide(for style: String) -> String {
+        switch style {
+        case "funny":
+            return "用幽默诙谐的语气写一段广告推荐，可以加入网络热梗或反转，让读者会心一笑。控制在 80 字以内。"
+        case "poetic":
+            return "写一首四句打油诗来推广这个产品，押韵有趣，朗朗上口。"
+        case "story":
+            return "写一个 100 字以内的微型故事，自然地带出产品卖点，读起来像朋友圈故事。"
+        case "slogan":
+            return "生成 3 条创意广告标语，每条不超过 15 字，要求新颖、好记、有传播力。"
+        default:
+            return "用幽默诙谐的语气写一段广告推荐。控制在 80 字以内。"
+        }
+    }
+
     /// 联网搜索：使用 DuckDuckGo Lite 抓取搜索结果摘要
     private func executeWebSearch(_ args: [String: Any]) async -> String {
         guard let query = args["query"] as? String, !query.trimmingCharacters(in: .whitespaces).isEmpty
@@ -292,30 +352,21 @@ final class AIService {
                 }
             }
 
-            // 也尝试更通用的解析：提取所有链接文本
+            // 通用回退：提取所有链接文本（DuckDuckGo Lite 可能变更 HTML 结构）
             if results.isEmpty {
-                var seenTitles: Set<String> = []
-                let linkPattern = try? NSRegularExpression(pattern: "<a[^>]*class=\"result-link\"[^>]*>([^<]*)</a>", options: .caseInsensitive)
-                let snippetPattern = try? NSRegularExpression(pattern: "class=\"result-snippet\"[^>]*>([^<]*)", options: .caseInsensitive)
-                if let linkPattern = linkPattern {
-                    let linkRange = NSRange(html.startIndex..., in: html)
-                    let linkMatches = linkPattern.matches(in: html, range: linkRange)
-                    for match in linkMatches.prefix(10) {
-                        if let titleRange = Range(match.range(at: 1), in: html) {
-                            let title = String(html[titleRange])
+                let pattern = try? NSRegularExpression(
+                    pattern: "<a[^>]*href=\"([^\"]*)\"[^>]*>([^<]+)</a>",
+                    options: .caseInsensitive
+                )
+                if let pattern = pattern {
+                    let range = NSRange(html.startIndex..., in: html)
+                    let matches = pattern.matches(in: html, range: range)
+                    for match in matches.prefix(5) {
+                        if let textRange = Range(match.range(at: 2), in: html) {
+                            let title = String(html[textRange])
                                 .trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !seenTitles.contains(title) {
-                                seenTitles.insert(title)
+                            if !title.isEmpty && title.count > 3 {
                                 results.append((title: title, snippet: ""))
-                            }
-                        }
-                    }
-                    if let snippetPattern = snippetPattern {
-                        let snippetMatches = snippetPattern.matches(in: html, range: linkRange)
-                        for (i, match) in snippetMatches.enumerated() {
-                            if i < results.count, let sRange = Range(match.range(at: 1), in: html) {
-                                results[i].snippet = String(html[sRange])
-                                    .trimmingCharacters(in: .whitespacesAndNewlines)
                             }
                         }
                     }
@@ -334,5 +385,47 @@ final class AIService {
         } catch {
             return "联网搜索失败：\(error.localizedDescription)"
         }
+    }
+}
+
+// MARK: - AIService Errors
+
+enum AIServiceError: LocalizedError {
+    case apiKeyNotConfigured
+    case rateLimited
+    case networkError(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .apiKeyNotConfigured:
+            return "请先在设置中配置 DeepSeek API Key"
+        case .rateLimited:
+            return "操作太频繁，请稍后再试"
+        case .networkError(let detail):
+            return "网络连接失败：\(detail)"
+        }
+    }
+}
+
+// MARK: - Rate Limiter
+
+final class RateLimiter {
+    private let minInterval: TimeInterval
+    private var lastProceedTime: Date = .distantPast
+    private let lock = NSLock()
+
+    init(minInterval: TimeInterval = 2.0) {
+        self.minInterval = minInterval
+    }
+
+    func shouldProceed() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = Date()
+        guard now.timeIntervalSince(lastProceedTime) >= minInterval else {
+            return false
+        }
+        lastProceedTime = now
+        return true
     }
 }

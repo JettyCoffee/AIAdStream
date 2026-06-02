@@ -14,9 +14,7 @@ final class DetailViewModel: ObservableObject {
     @Published var chatRecommendedAds: [AdItem] = []
     @Published var chatErrorMessage: String?
 
-    private var aiService: AIService {
-        AIService(apiKey: Constants.DeepSeek.apiKey)
-    }
+    private let aiService = AIService.shared
     private let db = DatabaseManager.shared
     private var streamTask: Task<Void, Never>?
 

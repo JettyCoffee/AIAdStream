@@ -38,7 +38,7 @@ struct CardInfoSection: View {
             }
         }
         .padding(16)
-        .background(.white)
+        .background(Color(.systemBackground))
     }
 }
 
@@ -163,10 +163,108 @@ struct CardTagRow: View {
 extension View {
     func cardStyle() -> some View {
         self
-            .background(.white)
+            .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
             .padding(.horizontal, 16)
+    }
+}
+
+// MARK: - Enhance Banner
+
+/// AI 趣味解读横幅：打字机动画逐字展示
+struct EnhanceBanner: View {
+    let text: String
+    let onDismiss: () -> Void
+
+    @State private var displayedCount = 0
+    @State private var timer: Timer?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 11))
+                .foregroundColor(.orange)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("趣味解读")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.orange)
+
+                Text(String(text.prefix(displayedCount)))
+                    .font(.system(size: 13))
+                    .foregroundColor(.primary.opacity(0.8))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.gray.opacity(0.3))
+            }
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .onAppear {
+            startTypewriter()
+        }
+        .onDisappear {
+            timer?.invalidate()
+        }
+    }
+
+    private func startTypewriter() {
+        displayedCount = 0
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { t in
+            if displayedCount < text.count {
+                displayedCount += 1
+            } else {
+                t.invalidate()
+            }
+        }
+    }
+}
+
+// MARK: - Enhance Button
+
+/// 趣味解读触发按钮
+struct EnhanceButton: View {
+    let isLoading: Bool
+    let hasContent: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10))
+                Text(hasContent ? "换一种" : "趣味解读")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(.orange)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.orange.opacity(0.08))
+            .clipShape(Capsule())
+            .overlay(
+                Group {
+                    if isLoading {
+                        Capsule()
+                            .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                    }
+                }
+            )
+        }
+        .disabled(isLoading)
+        .buttonStyle(.plain)
     }
 }
 

@@ -14,6 +14,10 @@ final class FeedViewModel: ObservableObject {
 
     @Published var isFiltering = false
 
+    // 趣味解读
+    @Published var enhancedContents: [String: String] = [:]
+    @Published var enhancingAdIds: Set<String> = []
+
     private let dataService = AdDataService()
     private let analytics = AnalyticsService.shared
     private let db = DatabaseManager.shared
@@ -190,5 +194,57 @@ final class FeedViewModel: ObservableObject {
 
     var allAdsAcrossChannels: [AdItem] {
         dataService.allAdsAcrossChannels()
+    }
+
+    // MARK: - AI Enhance
+
+    /// 触发 AI 趣味解读，结果缓存到 enhancedContents
+    func enhanceAd(_ ad: AdItem, style: String = "funny") {
+        let adId = ad.id
+        guard !enhancingAdIds.contains(adId) else { return }
+
+        enhancingAdIds.insert(adId)
+        let styleLabel = enhanceStyleLabel(style)
+
+        Task {
+            do {
+                let prompt = """
+                你是一个创意广告改写助手。请对以下广告进行「\(styleLabel)」风格的趣味改写，\
+                要求简洁有趣、让人愿意读完。只输出改写后的内容，不要输出任何解释说明。
+
+                广告标题：\(ad.title)
+                品牌：\(ad.sponsor)
+                描述：\(ad.description)
+                """
+                let history = [ChatMessage(role: .user, content: prompt)]
+                var result = ""
+                for try await event in AIService.shared.chat(history: history) {
+                    if case .contentDelta(let delta) = event {
+                        result += delta
+                    }
+                }
+                let trimmed = result.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty {
+                    await MainActor.run {
+                        enhancedContents[adId] = trimmed
+                        enhancingAdIds.remove(adId)
+                    }
+                } else {
+                    await MainActor.run { enhancingAdIds.remove(adId) }
+                }
+            } catch {
+                await MainActor.run { enhancingAdIds.remove(adId) }
+            }
+        }
+    }
+
+    private func enhanceStyleLabel(_ style: String) -> String {
+        switch style {
+        case "funny": return "幽默段子"
+        case "poetic": return "打油诗"
+        case "story": return "微型故事"
+        case "slogan": return "创意标语"
+        default: return "幽默段子"
+        }
     }
 }

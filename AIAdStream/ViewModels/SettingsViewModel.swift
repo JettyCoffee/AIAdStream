@@ -3,7 +3,7 @@ import Combine
 
 @MainActor
 final class SettingsViewModel: ObservableObject {
-    @AppStorage("deepseek_api_key") var apiKey = ""
+    @Published var apiKey: String = (try? KeychainService.shared.load()) ?? ""
     @AppStorage("auto_play_video") var autoPlayVideo = true
 
     /// 用户偏好的标签名称集合（JSON 数组存储）
@@ -61,5 +61,16 @@ final class SettingsViewModel: ObservableObject {
     /// 标签偏好数量
     var favoriteTagCount: Int {
         favoriteTags.count
+    }
+
+    // MARK: - Keychain
+
+    func saveAPIKey(_ key: String) {
+        let trimmed = key.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            try? KeychainService.shared.delete()
+        } else {
+            try? KeychainService.shared.save(trimmed)
+        }
     }
 }

@@ -28,7 +28,7 @@ struct FeedView: View {
                     feedScrollView
                 }
             }
-            .background(Color(red: 0.97, green: 0.97, blue: 0.97))
+            .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -103,7 +103,10 @@ struct FeedView: View {
                                     viewModel.applyTagFilter(tag.name)
                                 },
                                 isActive: activeVideoId == ad.id,
-                                activeTagFilter: viewModel.activeTagFilter
+                                activeTagFilter: viewModel.activeTagFilter,
+                                enhancedContent: viewModel.enhancedContents[ad.id],
+                                isEnhancing: viewModel.enhancingAdIds.contains(ad.id),
+                                onEnhance: { viewModel.enhanceAd(ad) }
                             )
                         }
                         .buttonStyle(.plain)

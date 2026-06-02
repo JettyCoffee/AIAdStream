@@ -10,6 +10,11 @@ struct AdCardView: View {
     let isActive: Bool
     var activeTagFilter: String?
 
+    // 趣味解读
+    var enhancedContent: String? = nil
+    var isEnhancing: Bool = false
+    var onEnhance: (() -> Void)? = nil
+
     var body: some View {
         Group {
             switch ad.cardType {
@@ -21,7 +26,10 @@ struct AdCardView: View {
                     onCollect: onCollect,
                     onShare: onShare,
                     onTagTap: onTagTap,
-                    activeTagFilter: activeTagFilter
+                    activeTagFilter: activeTagFilter,
+                    enhancedContent: enhancedContent,
+                    isEnhancing: isEnhancing,
+                    onEnhance: onEnhance
                 )
             case .smallImage:
                 SmallImageCard(
@@ -31,7 +39,10 @@ struct AdCardView: View {
                     onCollect: onCollect,
                     onShare: onShare,
                     onTagTap: onTagTap,
-                    activeTagFilter: activeTagFilter
+                    activeTagFilter: activeTagFilter,
+                    enhancedContent: enhancedContent,
+                    isEnhancing: isEnhancing,
+                    onEnhance: onEnhance
                 )
             case .video:
                 VideoCard(
@@ -42,7 +53,10 @@ struct AdCardView: View {
                     onShare: onShare,
                     onTagTap: onTagTap,
                     isActive: isActive,
-                    activeTagFilter: activeTagFilter
+                    activeTagFilter: activeTagFilter,
+                    enhancedContent: enhancedContent,
+                    isEnhancing: isEnhancing,
+                    onEnhance: onEnhance
                 )
             }
         }
