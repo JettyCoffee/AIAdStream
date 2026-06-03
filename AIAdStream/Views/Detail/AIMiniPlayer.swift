@@ -49,6 +49,7 @@ struct AIMiniPlayer: View {
             .glassBackground()
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
     }
 }
 
@@ -266,7 +267,7 @@ struct AIChatSheetContent: View {
                 Spacer()
             }
 
-            Text(msg.content)
+            Text(.init(msg.content))
                 .font(.system(size: 14))
                 .foregroundColor(msg.role == .user ? .white : .primary.opacity(0.8))
                 .padding(.horizontal, 12)

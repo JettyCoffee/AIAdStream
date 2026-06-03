@@ -193,7 +193,7 @@ struct SearchView: View {
                 Spacer()
             }
 
-            Text(msg.content)
+            Text(.init(msg.content))
                 .font(.system(size: 15))
                 .foregroundColor(msg.role == .user ? .white : .primary)
                 .padding(.horizontal, 14)
