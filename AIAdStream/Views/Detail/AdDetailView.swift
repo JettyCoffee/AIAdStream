@@ -9,7 +9,7 @@ struct AdDetailView: View {
     @State private var isPlaying = false
     @State private var isMuted = false
     @State private var player: AVPlayer?
-    @State private var panelState: AIPanelState = .bar
+    @State private var showAIChat = false
 
     init(ad: AdItem) {
         self.ad = ad
@@ -17,43 +17,24 @@ struct AdDetailView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                // 可滚动内容区
-                ScrollView {
-                    VStack(spacing: 0) {
-                        mediaSection
+        ScrollView {
+            VStack(spacing: 0) {
+                mediaSection
 
-                        VStack(alignment: .leading, spacing: 16) {
-                            headerSection
-                            brandSection
-                        }
-                        .padding(Constants.horizontalPadding)
-                        .padding(.top, 16)
-                        .padding(.bottom, max(100, panelState.height(in: geometry) + 16))
-                    }
+                VStack(alignment: .leading, spacing: 14) {
+                    headerSection
+                    brandSection
                 }
-
-                // 半透明遮罩（面板展开时）
-                if panelState != .bar {
-                    Color.black.opacity(dimmingOpacity)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.interpolatingSpring(stiffness: 300, damping: 30)) {
-                                panelState = .bar
-                            }
-                        }
-                }
-
-                // 可拖动 AI 面板
-                DraggableAIPanel(
-                    ad: ad,
-                    viewModel: viewModel,
-                    feedViewModel: feedViewModel,
-                    panelState: $panelState
-                )
-                .padding(.horizontal, panelState == .bar ? 0 : 0)
+                .padding(Constants.horizontalPadding)
+                .padding(.top, 16)
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            AIMiniPlayer(adTitle: ad.title) {
+                showAIChat = true
+            }
+            .padding(.horizontal, Constants.horizontalPadding)
+            .padding(.bottom, 8)
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
@@ -72,6 +53,15 @@ struct AdDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $showAIChat) {
+            AIChatSheetContent(
+                ad: ad,
+                viewModel: viewModel,
+                feedViewModel: feedViewModel
+            )
+            .presentationDetents([.medium, .large])
+            .presentationBackgroundInteraction(.enabled)
+        }
         .task {
             if ad.cardType == .video {
                 setupPlayer()
@@ -81,16 +71,6 @@ struct AdDetailView: View {
         }
         .onDisappear {
             cleanupPlayer()
-        }
-    }
-
-    // MARK: - Dimming
-
-    private var dimmingOpacity: Double {
-        switch panelState {
-        case .bar:    return 0
-        case .medium: return 0.15
-        case .large:  return 0.35
         }
     }
 
@@ -195,6 +175,32 @@ struct AdDetailView: View {
             Text(ad.title)
                 .font(.system(size: 22, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
+
+            // 互动操作栏（从底部面板移至此处）
+            interactionSection
+        }
+    }
+
+    // MARK: - Interaction Section
+
+    private var interactionSection: some View {
+        let interactionBinding = Binding(
+            get: { feedViewModel.interactionState(for: ad.id) },
+            set: { feedViewModel.interactionStates[ad.id] = $0 }
+        )
+
+        return VStack(spacing: 0) {
+            Divider()
+                .padding(.vertical, 4)
+
+            InteractionBar(
+                adId: ad.id,
+                state: interactionBinding,
+                onLike: { feedViewModel.toggleLike(for: ad.id) },
+                onCollect: { feedViewModel.toggleCollect(for: ad.id) },
+                onShare: { feedViewModel.incrementShare(for: ad.id) }
+            )
+            .padding(.vertical, 4)
         }
     }
 

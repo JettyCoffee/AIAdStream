@@ -2,20 +2,10 @@ import SwiftUI
 import Combine
 
 enum TimePeriod: String, CaseIterable {
-    case all = "全部"
-    case week = "本周"
     case today = "今日"
-}
-
-enum AnalyticsTab: String, CaseIterable {
-    case overview = "概览"
-    case content = "内容"
-    case events = "事件"
-}
-
-enum CreatorTab: String, CaseIterable {
-    case myAds = "我的广告"
-    case analytics = "数据看板"
+    case week = "本周"
+    case month = "本月"
+    case all = "全部"
 }
 
 /// 用户创建的广告
@@ -28,6 +18,33 @@ struct UserAd: Identifiable, Codable {
     var cardType: String
     var tags: [String]
     var createdAt: Date
+}
+
+/// 单日趋势数据点
+struct DailyTrendPoint: Identifiable {
+    var id: String { dateLabel }
+    let dateLabel: String
+    let date: Date
+    let impressions: Int
+    let clicks: Int
+}
+
+/// 渠道汇总统计
+struct ChannelSummary: Identifiable {
+    var id: String { channel }
+    let channel: String
+    let impressions: Int
+    let clicks: Int
+    let likes: Int
+    let collects: Int
+    let shares: Int
+    var interactions: Int { likes + collects + shares }
+    var ctr: Double {
+        impressions > 0 ? Double(clicks) / Double(impressions) * 100 : 0
+    }
+    var engagementRate: Double {
+        impressions > 0 ? Double(interactions) / Double(impressions) * 100 : 0
+    }
 }
 
 @MainActor
@@ -49,8 +66,6 @@ final class AnalyticsViewModel: ObservableObject {
     @Published var eventTypeBreakdown: [(type: AnalyticsEventType, count: Int)] = []
     @Published var selectedPeriod: TimePeriod = .all
     @Published var totalInteractions = 0
-    @Published var selectedTab: AnalyticsTab = .overview
-    @Published var selectedCreatorTab: CreatorTab = .myAds
 
     /// 用户投放的广告列表
     @Published var userAds: [UserAd] = []
@@ -64,6 +79,9 @@ final class AnalyticsViewModel: ObservableObject {
     @Published var newAdTagsText = ""
     @Published var showUploadSheet = false
 
+    /// 展开的广告 ID（用于排行榜行展开）
+    @Published var expandedTopAdId: String?
+
     private let service = AnalyticsService.shared
     private let db = DatabaseManager.shared
 
@@ -73,19 +91,28 @@ final class AnalyticsViewModel: ObservableObject {
         impressions + clicks + likes + collects + shares + searches + tagClicks
     }
 
+    // MARK: - 派生指标
+
+    /// 互动率 = (点赞+收藏+分享) / 曝光
+    var engagementRate: Double {
+        guard impressions > 0 else { return 0 }
+        return Double(totalInteractions) / Double(impressions) * 100
+    }
+
     /// 用户广告总数
     var userAdCount: Int { userAds.count }
 
     /// 用户广告获得的总曝光
     var userAdImpressions: Int {
         let adIds = Set(userAds.map(\.id))
-        return events.filter { adIds.contains($0.adId ?? "") && $0.type == .impression }.count
+        return periodFilteredEvents.filter { adIds.contains($0.adId ?? "") && $0.type == .impression }.count
     }
 
     /// 用户广告获得的总互动
     var userAdInteractions: Int {
         let adIds = Set(userAds.map(\.id))
-        return events.filter { adIds.contains($0.adId ?? "")
+        return periodFilteredEvents.filter {
+            adIds.contains($0.adId ?? "")
             && ($0.type == .like || $0.type == .collect || $0.type == .share)
         }.count
     }
@@ -93,22 +120,102 @@ final class AnalyticsViewModel: ObservableObject {
     /// 用户广告获得的总点击
     var userAdClicks: Int {
         let adIds = Set(userAds.map(\.id))
-        return events.filter { adIds.contains($0.adId ?? "") && $0.type == .click }.count
+        return periodFilteredEvents.filter { adIds.contains($0.adId ?? "") && $0.type == .click }.count
     }
+
+    // MARK: - 按时间范围过滤的事件
+
+    private var periodFilteredEvents: [AnalyticsEvent] {
+        let all = events
+        let calendar = Calendar.current
+        let now = Date()
+
+        switch selectedPeriod {
+        case .today:
+            return all.filter { calendar.isDateInToday($0.timestamp) }
+        case .week:
+            guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) else { return all }
+            return all.filter { $0.timestamp >= weekAgo }
+        case .month:
+            guard let monthAgo = calendar.date(byAdding: .day, value: -30, to: now) else { return all }
+            return all.filter { $0.timestamp >= monthAgo }
+        case .all:
+            return all
+        }
+    }
+
+    /// 每日趋势数据（用于折线/柱状图）
+    var dailyTrend: [DailyTrendPoint] {
+        let filtered = periodFilteredEvents
+        let calendar = Calendar.current
+        // 按日期分组
+        let grouped = Dictionary(grouping: filtered) { event in
+            calendar.startOfDay(for: event.timestamp)
+        }
+        // 生成日期范围内的所有日期
+        let allDates: [Date]
+        switch selectedPeriod {
+        case .today:
+            allDates = [calendar.startOfDay(for: Date())]
+        case .week:
+            allDates = (0..<7).compactMap { calendar.date(byAdding: .day, value: -$0, to: Date()) }
+                .map { calendar.startOfDay(for: $0) }
+                .sorted()
+        case .month:
+            allDates = (0..<30).compactMap { calendar.date(byAdding: .day, value: -$0, to: Date()) }
+                .map { calendar.startOfDay(for: $0) }
+                .sorted()
+        case .all:
+            let dates = grouped.keys.sorted()
+            allDates = dates
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = selectedPeriod == .month || selectedPeriod == .all ? "MM/dd" : "EEE"
+
+        return allDates.map { date in
+            let dayEvents = grouped[date] ?? []
+            return DailyTrendPoint(
+                dateLabel: formatter.string(from: date),
+                date: date,
+                impressions: dayEvents.filter { $0.type == .impression }.count,
+                clicks: dayEvents.filter { $0.type == .click }.count
+            )
+        }
+    }
+
+    /// 渠道汇总（带互动率）
+    var channelSummaries: [ChannelSummary] {
+        let filtered = periodFilteredEvents
+        let grouped = Dictionary(grouping: filtered.filter { $0.channel != nil }) { $0.channel! }
+        return grouped.map { channel, evts in
+            ChannelSummary(
+                channel: channel,
+                impressions: evts.filter { $0.type == .impression }.count,
+                clicks: evts.filter { $0.type == .click }.count,
+                likes: evts.filter { $0.type == .like }.count,
+                collects: evts.filter { $0.type == .collect }.count,
+                shares: evts.filter { $0.type == .share }.count
+            )
+        }.sorted { $0.impressions > $1.impressions }
+    }
+
+    // MARK: - Init
 
     init() {
         loadUserAds()
     }
 
     func refresh() {
-        impressions = service.impressionCount()
-        clicks = service.clickCount()
-        likes = service.likeCount()
-        collects = service.collectCount()
-        shares = service.shareCount()
-        searches = service.searchCount()
-        tagClicks = service.tagClickCount()
-        ctr = service.ctr()
+        events = service.allEvents()
+        impressions = periodFilteredEvents.filter { $0.type == .impression }.count
+        clicks = periodFilteredEvents.filter { $0.type == .click }.count
+        likes = periodFilteredEvents.filter { $0.type == .like }.count
+        collects = periodFilteredEvents.filter { $0.type == .collect }.count
+        shares = periodFilteredEvents.filter { $0.type == .share }.count
+        searches = periodFilteredEvents.filter { $0.type == .search }.count
+        tagClicks = periodFilteredEvents.filter { $0.type == .tagClick }.count
+        ctr = impressions > 0 ? Double(clicks) / Double(impressions) * 100 : 0
         totalInteractions = likes + collects + shares
         channelBreakdown = service.channelBreakdown()
         topAds = service.topInteractedAds()
