@@ -65,6 +65,7 @@ final class AIService {
                 }
 
                 var messages = [ChatMessage(role: .system, content: systemPrompt)] + history
+                var hasCalledTools = false
 
                 for _ in 0..<5 {
                     var fullContent = ""
@@ -92,8 +93,9 @@ final class AIService {
                     }
 
                     guard !toolCallDeltas.isEmpty else {
-                        // LLM 未调用任何工具：回退为自动搜索数据库
-                        if let lastUserMsg = history.last(where: { $0.role == .user }) {
+                        // 仅当 LLM 从未调用工具时才回退为自动搜索（首轮安全兜底）
+                        if !hasCalledTools,
+                           let lastUserMsg = history.last(where: { $0.role == .user }) {
                             let query = lastUserMsg.content
                             let (resultText, resultAds, _) = await executeTool(
                                 name: "search_ads",
@@ -115,6 +117,8 @@ final class AIService {
                         continuation.finish()
                         return
                     }
+
+                    hasCalledTools = true
 
                     // 将 assistant 消息（含 tool_calls）加入历史
                     let toolCalls = toolCallDeltas.map { delta in

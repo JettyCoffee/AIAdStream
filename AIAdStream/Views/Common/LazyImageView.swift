@@ -32,6 +32,9 @@ struct LazyImageView: View {
         guard !taskRunning else { return }
         guard loadedImage == nil, ImageCache.shared.image(for: imageName) == nil else { return }
 
+        // 用户创建的广告无图片 URL，保持默认占位状态（不显示错误图标）
+        guard !imageName.isEmpty else { return }
+
         guard imageName.hasPrefix("https://") || imageName.hasPrefix("http://") else {
             loadFailed = true
             return

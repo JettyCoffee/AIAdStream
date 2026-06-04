@@ -223,13 +223,13 @@ final class DatabaseManager {
                 }
             }))
 
-            var querySQL = "SELECT * FROM ad_items WHERE channel = ? ORDER BY id LIMIT ? OFFSET ?"
+            var querySQL = "SELECT * FROM ad_items WHERE channel = ? ORDER BY rowid DESC LIMIT ? OFFSET ?"
             if tagFilter != nil {
                 querySQL = """
                 SELECT DISTINCT a.* FROM ad_items a
                 JOIN ad_tags t ON a.id = t.ad_id
                 WHERE a.channel = ? AND t.name = ?
-                ORDER BY a.id LIMIT ? OFFSET ?
+                ORDER BY a.rowid DESC LIMIT ? OFFSET ?
                 """
             }
             ads = executeQuery(querySQL) { stmt in
@@ -265,7 +265,7 @@ final class DatabaseManager {
     func allAds(for channel: String) -> [AdItem] {
         var result: [AdItem] = []
         dbQueue.sync {
-            let rows = executeQuery("SELECT * FROM ad_items WHERE channel = ?") { stmt in
+            let rows = executeQuery("SELECT * FROM ad_items WHERE channel = ? ORDER BY rowid DESC") { stmt in
                 sqlite3_bind_text(stmt, 1, (channel as NSString).utf8String, -1, nil)
             }
             result = rows.map { rowToAdItem($0) }
@@ -289,7 +289,7 @@ final class DatabaseManager {
                 sql += " AND a.channel = ?"
                 params.append(ch)
             }
-            sql += " ORDER BY a.id LIMIT 20"
+            sql += " ORDER BY a.rowid DESC LIMIT 20"
 
             let rows = executeQuery(sql) { stmt in
                 for (i, param) in params.enumerated() {
@@ -412,6 +412,16 @@ final class DatabaseManager {
             }
         }
         return result
+    }
+
+    // MARK: - Delete
+
+    func deleteAd(_ id: String) {
+        dbQueue.sync {
+            executeUpdate("DELETE FROM ad_items WHERE id = ?") { stmt in
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+            }
+        }
     }
 
     // MARK: - Interaction Queries

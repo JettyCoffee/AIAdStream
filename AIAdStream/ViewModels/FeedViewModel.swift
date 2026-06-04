@@ -22,6 +22,8 @@ final class FeedViewModel: ObservableObject {
     private let analytics = AnalyticsService.shared
     private let db = DatabaseManager.shared
     private var currentPage = 0
+    private var shuffleSeed: UInt64 = UInt64(Date().timeIntervalSinceReferenceDate)
+    private var userAdObserver: NSObjectProtocol?
 
     /// 用户偏好标签（从 UserDefaults 读取）
     private var favoriteTags: [String] {
@@ -31,14 +33,24 @@ final class FeedViewModel: ObservableObject {
         return tags
     }
 
-    /// 根据用户偏好标签对广告重新排序：匹配标签越多越靠前
+    /// 根据用户偏好标签 + 种子值对广告排序：匹配标签越多越靠前，同分时种子打散确保每次刷新顺序不同
     private func applyRecommendation(_ incomingAds: [AdItem]) -> [AdItem] {
         let favTags = favoriteTags
-        guard !favTags.isEmpty else { return incomingAds }
+        let seed = shuffleSeed
+        guard !favTags.isEmpty else {
+            // 无偏好标签：种子值排序确保每次刷新顺序不同
+            return incomingAds.sorted {
+                ($0.id.hashValue ^ Int(truncatingIfNeeded: seed))
+                    < ($1.id.hashValue ^ Int(truncatingIfNeeded: seed))
+            }
+        }
         return incomingAds.sorted { a, b in
             let scoreA = a.tags.filter { favTags.contains($0.name) }.count
             let scoreB = b.tags.filter { favTags.contains($0.name) }.count
-            return scoreA > scoreB
+            if scoreA != scoreB { return scoreA > scoreB }
+            // 同分时种子打散
+            return (a.id.hashValue ^ Int(truncatingIfNeeded: seed))
+                < (b.id.hashValue ^ Int(truncatingIfNeeded: seed))
         }
     }
 
@@ -49,6 +61,18 @@ final class FeedViewModel: ObservableObject {
     func loadInitialData() async {
         interactionStates = db.loadAllInteractionStates()
         await switchChannel(to: currentChannel)
+
+        userAdObserver = NotificationCenter.default.addObserver(
+            forName: .userAdDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { [weak self] in await self?.refresh() }
+        }
+    }
+
+    deinit {
+        if let observer = userAdObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func switchChannel(to channel: Channel) async {
@@ -57,6 +81,7 @@ final class FeedViewModel: ObservableObject {
         hasMore = true
         isLoading = true
         activeTagFilter = nil
+        shuffleSeed = UInt64(Date().timeIntervalSinceReferenceDate)
         ads = []
         await loadPage(1)
         isLoading = false
@@ -66,6 +91,7 @@ final class FeedViewModel: ObservableObject {
         isRefreshing = true
         currentPage = 0
         hasMore = true
+        shuffleSeed = UInt64(Date().timeIntervalSinceReferenceDate)
         await loadPage(1)
         isRefreshing = false
     }
@@ -86,6 +112,7 @@ final class FeedViewModel: ObservableObject {
         }
         currentPage = 0
         hasMore = true
+        shuffleSeed = UInt64(Date().timeIntervalSinceReferenceDate)
         isFiltering = true
         Task {
             await loadPage(1)
@@ -100,12 +127,13 @@ final class FeedViewModel: ObservableObject {
                 tagFilter: activeTagFilter
             )
             if page == 1 {
-                // 首页且无标签筛选时应用用户偏好排序
-                ads = activeTagFilter == nil
-                    ? applyRecommendation(pageResult.ads)
-                    : pageResult.ads
+                ads = pageResult.ads
             } else {
                 ads.append(contentsOf: pageResult.ads)
+            }
+            // 无标签筛选时应用偏好排序（跨页一致，同分种子打散）
+            if activeTagFilter == nil {
+                ads = applyRecommendation(ads)
             }
             currentPage = page
             hasMore = pageResult.hasMore

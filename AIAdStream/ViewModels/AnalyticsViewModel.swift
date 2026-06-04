@@ -276,11 +276,15 @@ final class AnalyticsViewModel: ObservableObject {
         newAdSponsor = ""
         newAdTagsText = ""
         showUploadSheet = false
+
+        NotificationCenter.default.post(name: .userAdDidChange, object: nil)
     }
 
     func deleteUserAd(_ ad: UserAd) {
         userAds.removeAll { $0.id == ad.id }
         saveUserAds()
+        db.deleteAd(ad.id)
+        NotificationCenter.default.post(name: .userAdDidChange, object: nil)
     }
 
     private func saveUserAds() {
@@ -307,4 +311,11 @@ final class AnalyticsViewModel: ObservableObject {
     var cardTypeOptions: [(value: String, label: String)] {
         [("bigImage", "大图卡片"), ("smallImage", "小图卡片"), ("video", "视频卡片")]
     }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    /// 用户广告变更（上传 / 删除）
+    static let userAdDidChange = Notification.Name("com.aiadstream.userAdDidChange")
 }

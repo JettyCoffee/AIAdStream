@@ -60,9 +60,12 @@ final class SearchViewModel: ObservableObject {
                         }
 
                     case .toolCallResult(let result):
-                        pendingAds = result.ads
+                        // 详情结果优先替换，搜索/appended累积并去重
                         if let detail = result.detailAd {
                             pendingAds = [detail]
+                        } else if !result.ads.isEmpty {
+                            let existingIds = Set(pendingAds.map(\.id))
+                            pendingAds.append(contentsOf: result.ads.filter { !existingIds.contains($0.id) })
                         }
 
                     case .done(let finalContent):

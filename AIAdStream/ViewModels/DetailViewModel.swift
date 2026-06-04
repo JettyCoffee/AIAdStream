@@ -58,7 +58,8 @@ final class DetailViewModel: ObservableObject {
 
                     case .toolCallResult(let result):
                         if !result.ads.isEmpty {
-                            chatRecommendedAds = result.ads
+                            let existingIds = Set(chatRecommendedAds.map(\.id))
+                            chatRecommendedAds.append(contentsOf: result.ads.filter { !existingIds.contains($0.id) })
                         }
 
                     case .done(let finalContent):
