@@ -157,7 +157,7 @@ AIAdStream/
 
 ## 演示视频
 
-[下载演示视频](./demo.mp4)（3-8 分钟，展示信息流浏览 → 刷新加载 → 摘要/标签 → 详情互动 → 对话搜索）
+[演示视频](https://my.feishu.cn/file/WoQeblHvho8VmYxQ9ALc8C7lnrb?from=from_copylink)（3-8 分钟，展示信息流浏览 → 刷新加载 → 摘要/标签 → 详情互动 → 对话搜索）
 
 ## License
 
