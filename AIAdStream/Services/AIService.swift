@@ -1,6 +1,19 @@
 import Foundation
 
 // MARK: - AI Service (DeepSeek Orchestration)
+/*  ⽤户消息 → DeepSeek API (流式)
+    ├── content delta → 流式输出给 UI
+    ├── tool_calls delta → 累积
+    └── finish_reason: "tool_calls"
+    ↓
+    执⾏⼯具调⽤（本地数据库查询 / ⽹络搜索）
+    ↓
+    将 tool result 回传给 API（作为 tool ⻆⾊消息）
+    ↓
+    继续下⼀轮对话（最多 5 轮循环）
+    ↓
+    finish_reason: "stop" → 输出最终 summary + ⼴告卡⽚数据给 UI 展示
+ */
 
 final class AIService {
     static let shared = AIService()

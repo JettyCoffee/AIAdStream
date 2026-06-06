@@ -22,7 +22,9 @@ final class FeedViewModel: ObservableObject {
     private let analytics = AnalyticsService.shared
     private let db = DatabaseManager.shared
     private var currentPage = 0
-    private var shuffleSeed: UInt64 = UInt64(Date().timeIntervalSinceReferenceDate)
+    private var shuffleSeed: UInt64 = UInt64.random(in: .min ... .max)
+    private var preFilterShuffleSeed: UInt64?
+    private var suppressLoadMoreUntil: Date = .distantPast
     private var userAdObserver: NSObjectProtocol?
 
     /// 用户偏好标签（从 UserDefaults 读取）
@@ -60,7 +62,10 @@ final class FeedViewModel: ObservableObject {
 
     func loadInitialData() async {
         interactionStates = db.loadAllInteractionStates()
-        await switchChannel(to: currentChannel)
+        // 避免 .task 在详情返回后重复触发导致重新打乱
+        if ads.isEmpty {
+            await switchChannel(to: currentChannel)
+        }
 
         userAdObserver = NotificationCenter.default.addObserver(
             forName: .userAdDidChange, object: nil, queue: .main
@@ -81,7 +86,7 @@ final class FeedViewModel: ObservableObject {
         hasMore = true
         isLoading = true
         activeTagFilter = nil
-        shuffleSeed = UInt64(Date().timeIntervalSinceReferenceDate)
+        shuffleSeed = UInt64.random(in: .min ... .max)
         ads = []
         await loadPage(1)
         isLoading = false
@@ -91,28 +96,56 @@ final class FeedViewModel: ObservableObject {
         isRefreshing = true
         currentPage = 0
         hasMore = true
-        shuffleSeed = UInt64(Date().timeIntervalSinceReferenceDate)
+        activeTagFilter = nil
+        shuffleSeed = UInt64.random(in: .min ... .max)
         await loadPage(1)
+        // 短暂延迟确保刷新动画可见
+        try? await Task.sleep(nanoseconds: 400_000_000)
         isRefreshing = false
     }
 
+    /// 从详情页返回时短暂禁止加载更多，避免 onAppear 误触发 reshuffle
+    func suppressLoadMoreBriefly() {
+        suppressLoadMoreUntil = Date().addingTimeInterval(1.0)
+    }
+
     func loadMoreIfNeeded(currentItem: AdItem) async {
-        guard hasMore, !isLoading, let lastItem = ads.last, lastItem.id == currentItem.id else { return }
+        guard hasMore, !isLoading,
+              Date() > suppressLoadMoreUntil,
+              let lastItem = ads.last, lastItem.id == currentItem.id else { return }
         isLoading = true
         await loadPage(currentPage + 1)
         isLoading = false
     }
 
     func applyTagFilter(_ tagName: String?) {
+        let wasFiltered = activeTagFilter != nil
+
         // 点击已激活的标签时取消筛选
         if tagName != nil && activeTagFilter == tagName {
             activeTagFilter = nil
         } else {
             activeTagFilter = tagName
         }
+
+        let isClearingFilter = wasFiltered && activeTagFilter == nil
+        let isApplyingFirstFilter = !wasFiltered && activeTagFilter != nil
+
         currentPage = 0
         hasMore = true
-        shuffleSeed = UInt64(Date().timeIntervalSinceReferenceDate)
+
+        if isClearingFilter {
+            // 取消筛选：恢复之前的种子，列表顺序与筛选前一致
+            if let savedSeed = preFilterShuffleSeed {
+                shuffleSeed = savedSeed
+            }
+            preFilterShuffleSeed = nil
+        } else if isApplyingFirstFilter {
+            // 首次应用筛选：保存当前种子，以便取消时恢复
+            preFilterShuffleSeed = shuffleSeed
+        }
+        // 切换筛选时不做种子更新
+
         isFiltering = true
         Task {
             await loadPage(1)
@@ -122,21 +155,29 @@ final class FeedViewModel: ObservableObject {
 
     private func loadPage(_ page: Int) async {
         do {
-            let pageResult = try await dataService.fetchAds(
-                channel: currentChannel, page: page, pageSize: Constants.pageSize,
-                tagFilter: activeTagFilter
-            )
-            if page == 1 {
-                ads = pageResult.ads
+            if let filter = activeTagFilter {
+                // 标签筛选：加载全部广告，客户端筛选以保留打乱顺序
+                let allAds = dataService.allAds(for: currentChannel)
+                let shuffled = applyRecommendation(allAds)
+                ads = shuffled.filter { ad in
+                    ad.tags.contains { $0.name == filter }
+                }
+                hasMore = false
+                currentPage = page
             } else {
-                ads.append(contentsOf: pageResult.ads)
-            }
-            // 无标签筛选时应用偏好排序（跨页一致，同分种子打散）
-            if activeTagFilter == nil {
+                let pageResult = try await dataService.fetchAds(
+                    channel: currentChannel, page: page, pageSize: Constants.pageSize,
+                    tagFilter: nil
+                )
+                if page == 1 {
+                    ads = pageResult.ads
+                } else {
+                    ads.append(contentsOf: pageResult.ads)
+                }
                 ads = applyRecommendation(ads)
+                currentPage = page
+                hasMore = pageResult.hasMore
             }
-            currentPage = page
-            hasMore = pageResult.hasMore
         } catch {
             hasMore = false
         }

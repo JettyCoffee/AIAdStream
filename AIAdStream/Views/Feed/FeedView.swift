@@ -4,7 +4,7 @@ struct FeedView: View {
     @EnvironmentObject var viewModel: FeedViewModel
     @State private var activeVideoId: String?
     @State private var savedScrollAdId: String?
-    @State private var needsScrollRestore = false
+    @State private var selectedAd: AdItem?
 
     var body: some View {
         NavigationStack {
@@ -12,15 +12,10 @@ struct FeedView: View {
                 ChannelTabBar(selectedChannel: $viewModel.currentChannel)
                     .onChange(of: viewModel.currentChannel) { _, newChannel in
                         savedScrollAdId = nil
-                        needsScrollRestore = false
                         Task { await viewModel.switchChannel(to: newChannel) }
                     }
 
                 Divider().foregroundColor(Constants.Colors.separator)
-
-                if viewModel.isFiltering {
-                    filterLoadingBar
-                }
 
                 if viewModel.ads.isEmpty && !viewModel.isLoading {
                     emptyStateView
@@ -89,8 +84,9 @@ struct FeedView: View {
             ScrollView {
                 LazyVStack(spacing: Constants.cardSpacing) {
                     ForEach(viewModel.ads) { ad in
-                        NavigationLink {
-                            AdDetailView(ad: ad).environmentObject(viewModel)
+                        Button {
+                            savedScrollAdId = ad.id
+                            selectedAd = ad
                         } label: {
                             AdCardView(
                                 ad: ad,
@@ -100,7 +96,9 @@ struct FeedView: View {
                                 onShare: { viewModel.incrementShare(for: ad.id) },
                                 onTagTap: { tag in
                                     viewModel.trackTagClick(adId: ad.id, tagName: tag.name)
-                                    viewModel.applyTagFilter(tag.name)
+                                    DispatchQueue.main.async {
+                                        viewModel.applyTagFilter(tag.name)
+                                    }
                                 },
                                 isActive: activeVideoId == ad.id,
                                 activeTagFilter: viewModel.activeTagFilter,
@@ -119,42 +117,31 @@ struct FeedView: View {
                         .onDisappear {
                             if ad.cardType == .video && activeVideoId == ad.id { activeVideoId = nil }
                         }
-                        .simultaneousGesture(
-                            TapGesture().onEnded {
-                                savedScrollAdId = ad.id
-                                needsScrollRestore = true
-                            }
-                        )
                     }
                     if viewModel.hasMore { LoadingFooterView() }
                 }
                 .padding(.vertical, 8)
             }
             .refreshable { await viewModel.refresh() }
-            .onAppear {
-                // 从详情页返回时恢复滚动位置，筛选期间跳过
-                guard needsScrollRestore, !viewModel.isFiltering, let target = savedScrollAdId else { return }
-                needsScrollRestore = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                    proxy.scrollTo(target)
+            .navigationDestination(item: $selectedAd) { ad in
+                AdDetailView(ad: ad).environmentObject(viewModel)
+            }
+            .onChange(of: selectedAd) { _, newValue in
+                if newValue != nil {
+                    // 进入详情页：禁止 onAppear 误触发 loadMore
+                    viewModel.suppressLoadMoreBriefly()
+                } else if let target = savedScrollAdId {
+                    // 从详情页返回：禁止返回后的 onAppear，恢复滚动位置
+                    viewModel.suppressLoadMoreBriefly()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        proxy.scrollTo(target)
+                    }
                 }
             }
         }
     }
 
     // MARK: - Misc
-
-    private var filterLoadingBar: some View {
-        HStack(spacing: 8) {
-            ProgressView().scaleEffect(0.7)
-            Text("筛选加载中...")
-                .font(.system(size: 12))
-                .foregroundColor(Constants.Colors.secondaryText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(viewModel.currentChannel.accentColor.opacity(0.08))
-    }
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {

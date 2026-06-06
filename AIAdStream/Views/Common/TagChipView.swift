@@ -7,18 +7,17 @@ struct TagChipView: View {
     var onTap: (() -> Void)?
 
     var body: some View {
-        Button {
-            onTap?()
-        } label: {
-            Text(tag.name)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(isHighlighted ? .white : .primary.opacity(0.7))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(isHighlighted ? highlightColor : Constants.Colors.tagBackground)
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        Text(tag.name)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(isHighlighted ? .white : .primary.opacity(0.7))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(isHighlighted ? highlightColor : Constants.Colors.tagBackground)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+            .highPriorityGesture(
+                TapGesture().onEnded { onTap?() }
+            )
     }
 }
 

@@ -149,6 +149,7 @@ enum ConversationItem: Identifiable {
         return nil
     }
 
+    // 广告卡片
     var ads: [AdItem]? {
         if case .adCards(let list) = self { return list }
         return nil

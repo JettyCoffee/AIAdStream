@@ -39,6 +39,12 @@ final class DatabaseManager {
         createInteractionAndAnalyticsTables()
     }
 
+    //ad_items (id, title, description, image_url, video_url, card_type, channel, sponsor, ai_summary)
+    //ad_tags (id, ad_id, name, category) -- 多对多关联
+    //interaction_states (ad_id, is_liked, is_collected, like_count, share_count)
+    //analytics_events (id, event_type, ad_id, channel, timestamp, metadata)
+
+
     /// 仅创建 ad_items 与 ad_tags 表（种子重播时调用）
     private func createAdTables() {
         let createAdsTable = """
